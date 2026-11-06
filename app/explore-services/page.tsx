@@ -577,7 +577,7 @@ export default function UnifiedMarketplacePage() {
   const IconComponent = config.icon;
 
   return (
-    <div className="u-container pt-6 pb-28 px-4 md:px-6">
+    <div className="u-container py-6 px-4 md:px-6">
       <header className="mb-8 max-w-2xl">
         <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-2">
           Explore the marketplace
@@ -931,7 +931,7 @@ export default function UnifiedMarketplacePage() {
           </div>
         </aside>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 pb-24">
           {/* Search + Sort */}
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">
@@ -1232,7 +1232,7 @@ export default function UnifiedMarketplacePage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header with Image */}
-            <div className="relative h-64 bg-slate-950">
+            <div className="relative h-40 sm:h-64 shrink-0 bg-slate-950">
               {previewService.imageUrl || previewService.images?.[0] ? (
                 <>
                   <img
@@ -1256,7 +1256,7 @@ export default function UnifiedMarketplacePage() {
               <button
                 aria-label="Close service preview"
                 onClick={() => setPreviewService(null)}
-                className="absolute top-4 right-4 p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-colors"
+                className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-colors"
               >
                 <svg
                   className="w-5 h-5"
