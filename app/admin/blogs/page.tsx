@@ -161,22 +161,17 @@ export default function AdminBlogsPage() {
 
   // Upload image
   const uploadImage = async (file: File): Promise<string | null> => {
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-
     const formData = new FormData();
     formData.append("image", file);
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL || "https://uremo-backend.onrender.com"}/api/upload/image`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        },
+      const data = await apiRequest<{ ok: boolean; url?: string }>(
+        "/api/upload/image",
+        "POST",
+        formData,
+        true,
+        true,
       );
-      const data = await res.json();
       if (data.ok && data.url) {
         return data.url;
       }
