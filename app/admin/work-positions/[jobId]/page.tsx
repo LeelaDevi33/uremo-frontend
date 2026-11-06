@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
+import { experienceLabels, workModeLabels, type RoleBrief } from "../roleBrief";
 
 /**
  * PATCH_43: Admin Job Role Control Panel
@@ -53,13 +54,12 @@ type TrainingMaterial = {
   description?: string;
 };
 
-type JobRole = {
+type JobRole = RoleBrief & {
   _id: string;
   revision?: string;
   updatedAt?: string;
   title: string;
   category: string;
-  description?: string;
   hasScreening?: boolean;
   screeningId?: {
     _id: string;
@@ -655,7 +655,7 @@ export default function AdminJobRolePage() {
         >
           ← Back to Work Positions
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">{job.title}</h1>
             <p className="text-sm text-slate-400 mt-1">
@@ -670,6 +670,27 @@ export default function AdminJobRolePage() {
           </div>
         </div>
       </div>
+
+      <details className="card mb-6">
+        <summary className="cursor-pointer font-semibold">Public role brief</summary>
+        <div className="mt-4 space-y-4 break-words">
+          {job.description && <p className="whitespace-pre-line text-slate-300">{job.description}</p>}
+          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+            {[
+              ["Experience level", job.experienceLevel && experienceLabels[job.experienceLevel]],
+              ["Work mode", job.workMode && workModeLabels[job.workMode]],
+              ["Eligible locations", job.locationEligibility],
+              ["Time commitment", job.timeCommitment],
+            ].filter(([, value]) => Boolean(value)).map(([label, value]) => (
+              <div key={label}><dt className="text-slate-400">{label}</dt><dd>{value}</dd></div>
+            ))}
+          </dl>
+          {!!job.skills?.length && <div><h2 className="text-sm text-slate-400">Skills</h2><ul className="flex flex-wrap gap-2">{job.skills.map(skill => <li key={skill} className="rounded border border-white/10 px-2 py-1 text-sm">{skill}</li>)}</ul></div>}
+          {!!job.responsibilities?.length && <div><h2 className="text-sm text-slate-400">Responsibilities</h2><ul className="list-disc space-y-1 pl-5">{job.responsibilities.map(item => <li key={item}>{item}</li>)}</ul></div>}
+          {job.requirements && <div><h2 className="text-sm text-slate-400">Applicant requirements</h2><p className="whitespace-pre-line">{job.requirements}</p></div>}
+          <Link href={`/admin/work-positions?edit=${job._id}`} className="inline-block text-sm text-cyan-300 underline">Edit applicant-facing information</Link>
+        </div>
+      </details>
 
       {/* Stats Cards */}
       {stats && (

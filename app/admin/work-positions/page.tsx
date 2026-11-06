@@ -4,15 +4,16 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { projectCategories } from "../opportunities/editor";
+import { briefFields, briefPayload, experienceLabels, workModeLabels, type RoleBrief } from "./roleBrief";
 
-type Role = {
-  _id: string; title: string; category: string; description?: string; requirements?: string;
+type Role = RoleBrief & {
+  _id: string; title: string; category: string;
   adminNotes?: string; active?: boolean; sortOrder?: number; revision?: string; updatedAt?: string;
   hasScreening?: boolean; screeningId?: unknown; screeningIds?: unknown[]; trainingMaterials?: unknown[];
 };
 function fields(role?: Role) {
-  return { title: role?.title ?? "", category: role?.category ?? "", description: role?.description ?? "",
-    requirements: role?.requirements ?? "", adminNotes: role?.adminNotes ?? "", active: role?.active !== false,
+  return { title: role?.title ?? "", category: role?.category ?? "", ...briefFields(role),
+    adminNotes: role?.adminNotes ?? "", active: role?.active !== false,
     sortOrder: String(role?.sortOrder ?? 0) };
 }
 const endpoint = "/api/admin/work-positions";
@@ -74,7 +75,7 @@ export default function AdminWorkPositionsPage() {
     if (role && action === "toggle" && role.active !== false && !window.confirm(`Deactivate “${role.title}” and close it to new applications?`)) return;
     lock.current = true; setBusy(true); setError(""); setNotice("");
     try {
-      const body = action === "save" && draft ? { ...draft, title: draft.title.trim(), category: draft.category.trim(), sortOrder: Number(draft.sortOrder) } :
+      const body = action === "save" && draft ? { ...draft, ...briefPayload(draft), title: draft.title.trim(), category: draft.category.trim(), sortOrder: Number(draft.sortOrder) } :
         action === "toggle" ? { active: role?.active === false } : {};
       await apiRequest(role ? endpoint + "/" + role._id : endpoint, action === "delete" ? "DELETE" : role ? "PUT" : "POST",
         { ...body, ...(role && { expectedRevision: version }) }, true);
@@ -89,7 +90,7 @@ export default function AdminWorkPositionsPage() {
   const suggestions = [...new Set([...projectCategories.map(([value]) => value), ...categories])].sort();
   const visible = rows.filter(row => (!category || row.category === category) &&
     (active === "all" || (row.active !== false) === (active === "active")) &&
-    [row.title, row.category, row.description, row.requirements].some(value => value?.toLowerCase().includes(query.toLowerCase().trim())));
+    [row.title, row.category, row.description, row.requirements, row.locationEligibility, ...(row.skills ?? [])].some(value => value?.toLowerCase().includes(query.toLowerCase().trim())));
   const draft = editor?.draft;
   function update(key: keyof ReturnType<typeof fields>, value: string | boolean) {
     setEditor(current => current && ({ ...current, draft: { ...current.draft, [key]: value } }));
@@ -102,19 +103,39 @@ export default function AdminWorkPositionsPage() {
     <header className="my-4 flex flex-wrap justify-between gap-3"><h1 className="text-3xl font-semibold">{editor ? editor.role ? "Edit specialization" : "New specialization" : "Specializations"}</h1>
       {!editor && <button className="btn-primary" type="button" onClick={() => edit()} disabled={busy || loading}>New specialization</button>}</header>
     {!editor && <p className="mb-4 text-sm text-slate-300">Workers apply to a specialization here. Set its requirements, then manage the applicants, screenings and projects for that role.</p>}
-    {error && <p role="alert" className="mb-3 rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
+    {error && !editor && <p role="alert" className="mb-3 rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
     {notice && <p role="status" className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3">{notice}</p>}
     {draft && editor ? <form className={panel + " max-w-3xl"} onSubmit={save}>
       <fieldset disabled={busy} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2"><label>Role title<input className={input} maxLength={80} required value={draft.title} onChange={e => update("title", e.target.value)} /></label>
         <label>Role category<input className={input} maxLength={48} required value={draft.category} list="job-role-categories" onChange={e => update("category", e.target.value)} />
           <datalist id="job-role-categories">{suggestions.map(value => <option key={value} value={value} />)}</datalist></label></div>
-        <label className="block">Public description<textarea aria-label="Public description" className={input} rows={3} maxLength={800} value={draft.description} onChange={e => update("description", e.target.value)} /></label>
-        <label className="block">Applicant requirements<textarea aria-label="Applicant requirements" className={input} rows={3} maxLength={1600} value={draft.requirements} onChange={e => update("requirements", e.target.value)} /></label>
+        <fieldset className="space-y-4 border-y border-white/10 py-4">
+          <legend className="px-1 font-semibold">Public role brief</legend>
+          <label className="block">Public description<textarea aria-label="Public description" className={input} rows={3} maxLength={800} value={draft.description} onChange={e => update("description", e.target.value)} /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>Experience level<select className={input} value={draft.experienceLevel} onChange={e => update("experienceLevel", e.target.value)}>
+              <option value="">Unspecified</option>
+              {Object.entries(experienceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            <label>Work mode<select className={input} value={draft.workMode} onChange={e => update("workMode", e.target.value)}>
+              <option value="">Unspecified</option>
+              {Object.entries(workModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            <label>Eligible locations<input className={input} maxLength={160} value={draft.locationEligibility} onChange={e => update("locationEligibility", e.target.value)} /></label>
+            <label>Time commitment<input className={input} maxLength={120} value={draft.timeCommitment} onChange={e => update("timeCommitment", e.target.value)} /></label>
+          </div>
+          <label className="block">Skills<textarea aria-describedby="role-skill-hint" className={input} rows={3} value={draft.skills} onChange={e => update("skills", e.target.value)} /></label>
+          <p id="role-skill-hint" className="text-xs text-slate-400">Enter up to 12 skills, one per line.</p>
+          <label className="block">Responsibilities<textarea aria-describedby="role-responsibility-hint" className={input} rows={3} value={draft.responsibilities} onChange={e => update("responsibilities", e.target.value)} /></label>
+          <p id="role-responsibility-hint" className="text-xs text-slate-400">Enter up to 12 responsibilities, one per line.</p>
+          <label className="block">Applicant requirements<textarea aria-label="Applicant requirements" className={input} rows={3} maxLength={1600} value={draft.requirements} onChange={e => update("requirements", e.target.value)} /></label>
+        </fieldset>
         <label className="block">Private admin notes<textarea aria-label="Private admin notes" className={input} rows={2} maxLength={4000} value={draft.adminNotes} onChange={e => update("adminNotes", e.target.value)} /></label>
         <label className="block max-w-xs">Display order<input className={input} type="number" step="1" required value={draft.sortOrder} onChange={e => update("sortOrder", e.target.value)} /></label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={draft.active} onChange={e => update("active", e.target.checked)} /> Accept applications for this specialization</label>
-        <div className="flex flex-wrap gap-3"><button className="btn-primary" type="submit">{busy ? "Saving…" : "Save role"}</button>
+        {error && <p role="alert" className="rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
+        <div className="flex flex-wrap gap-3"><button className="btn-primary" type="submit" disabled={conflict}>{busy ? "Saving…" : "Save role"}</button>
           <button className="btn-secondary" type="button" onClick={close}>Cancel</button>
           {editor.role && conflict && <button className="btn-secondary" type="button" disabled={loading} onClick={() => {
             const latest = rows.find(row => row._id === editor.role?._id);
