@@ -108,6 +108,7 @@ test("published role identity and closed ownership survive later edits", () => {
     ...listingPayload(complete, "archived"),
     currency: "USD",
     _id: "listing",
+    revision: "2026-11-06T00:00:00.000Z",
     availability: "available",
     firstPublishedAt: "2026-11-06",
   };

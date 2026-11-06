@@ -1,11 +1,13 @@
 "use client";
 
-import { cloneElement, useEffect, useId, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useEffect, useId, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
 import Link from "next/link";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
+import OpportunityReceipts from "@/components/admin/OpportunityReceipts";
 import {
   editorError,
   listingPayload,
+  projectCategories,
   toDraft,
   type Draft,
   type ListingStatus,
@@ -15,15 +17,6 @@ import {
 } from "./editor";
 
 const endpoint = "/api/admin/opportunities";
-const categories = [
-  ["development", "Development"],
-  ["design", "Design"],
-  ["operations", "Operations"],
-  ["writing", "Writing"],
-  ["data", "Data"],
-  ["research", "Research"],
-  ["other", "Other project work"],
-];
 const input =
   "mt-1.5 block w-full rounded-lg border border-slate-700 bg-[#0a101b] px-3 py-2.5 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none disabled:opacity-60";
 const primary =
@@ -95,7 +88,9 @@ export default function AdminOpportunitiesPage() {
   const [reload, setReload] = useState(0);
   const [edit, setEdit] = useState<Edit | null>(null);
   const [busy, setBusy] = useState(false);
+  const writing = useRef(false);
   const [error, setError] = useState("");
+  const [conflict, setConflict] = useState(false);
   const [notice, setNotice] = useState("");
   const [filter, setFilter] = useState("all");
   const [revenue, setRevenue] = useState<Revenue | null>(null);
@@ -170,6 +165,7 @@ export default function AdminOpportunitiesPage() {
         opportunity: OpportunityDetail;
       }>(endpoint + "/" + encodeURIComponent(id), "GET", null, true);
       setEdit({ existing: opportunity, draft: toDraft(opportunity) });
+      setConflict(false);
     } catch (err) {
       setError(message(err));
     } finally {
@@ -192,11 +188,12 @@ export default function AdminOpportunitiesPage() {
     )
       return;
     setEdit(null);
+    setConflict(false);
     setError("");
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!edit || busy || edit.existing?.availability === "sold") return;
+    if (!edit || busy || writing.current || edit.existing?.availability === "sold") return;
     const submitter = (event.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement | null;
     const status: ListingStatus =
@@ -208,6 +205,7 @@ export default function AdminOpportunitiesPage() {
       setError(validation);
       return;
     }
+    writing.current = true;
     setBusy(true);
     setError("");
     try {
@@ -217,7 +215,7 @@ export default function AdminOpportunitiesPage() {
       await apiRequest(
         url,
         edit.existing ? "PATCH" : "POST",
-        listingPayload(edit.draft, status),
+        { ...listingPayload(edit.draft, status), ...(edit.existing && { expectedRevision: edit.existing.revision }) },
         true,
       );
       setNotice(
@@ -228,35 +226,40 @@ export default function AdminOpportunitiesPage() {
       setEdit(null);
       refresh();
     } catch (err) {
+      setConflict(err instanceof ApiError && err.status === 409);
       setError(message(err));
     } finally {
+      writing.current = false;
       setBusy(false);
     }
   }
-  async function archive() {
+  async function changeVisibility(status: "draft" | "archived") {
     const existing = edit?.existing;
-    if (!existing || existing.availability === "sold" || busy) return;
+    if (!existing || busy || writing.current || (existing.availability === "sold" && status !== "archived")) return;
     if (
       !window.confirm(
-        "Archive the saved listing and close it to new transactions? Any unsaved edits will be discarded.",
+        `Move the saved listing to ${status}? This hides it from discovery. Existing rentals and purchases keep their recorded terms. Any unsaved edits will be discarded.`,
       )
     )
       return;
+    writing.current = true;
     setBusy(true);
     setError("");
     try {
       await apiRequest(
         endpoint + "/" + encodeURIComponent(existing._id),
         "PATCH",
-        { status: "archived" },
+        { status, expectedRevision: existing.revision },
         true,
       );
-      setNotice("Opportunity archived.");
+      setNotice(status === "archived" ? "Opportunity archived." : "Opportunity moved to drafts.");
       setEdit(null);
       refresh();
     } catch (err) {
+      setConflict(err instanceof ApiError && err.status === 409);
       setError(message(err));
     } finally {
+      writing.current = false;
       setBusy(false);
     }
   }
@@ -268,9 +271,7 @@ export default function AdminOpportunitiesPage() {
   const visibleRows = rows.filter(
     (row) =>
       filter === "all" ||
-      (filter === "sold"
-        ? row.availability === "sold"
-        : row.status === filter && row.availability !== "sold"),
+      row.availability === filter || row.status === filter,
   );
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-slate-200 sm:px-6 lg:py-9">
@@ -304,6 +305,7 @@ export default function AdminOpportunitiesPage() {
             onClick={() => {
               setNotice("");
               setError("");
+              setConflict(false);
               setEdit({ draft: toDraft() });
             }}
           >
@@ -378,6 +380,8 @@ export default function AdminOpportunitiesPage() {
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="archived">Archived</option>
+                <option value="available">Available</option>
+                <option value="rented">Rented</option>
                 <option value="sold">Sold</option>
               </select>
             </label>
@@ -413,7 +417,7 @@ export default function AdminOpportunitiesPage() {
                     <div className="min-w-0">
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-cyan-300">
                         {row.availability === "sold"
-                          ? "Sold · closed"
+                          ? row.status === "archived" ? "Sold · archived" : "Sold · closed"
                           : row.availability === "rented"
                             ? row.status + " · rented"
                             : row.status}
@@ -451,13 +455,13 @@ export default function AdminOpportunitiesPage() {
               ))}
             </ul>
           )}
+          <OpportunityReceipts />
         </>
       ) : (
         <form onSubmit={save} noValidate>
           {sold && (
             <p role="status" className="mb-4 text-sm text-amber-200">
-              Exclusive ownership has transferred. This listing is closed and
-              read-only.
+              Exclusive ownership has transferred. {existing?.status === "archived" ? "This listing has been archived." : "You can archive this listing."}
             </p>
           )}
           {existing?.availability === "rented" && (
@@ -487,7 +491,7 @@ export default function AdminOpportunitiesPage() {
                     onChange={(e) => change("category", e.target.value)}
                   >
                     <option value="">Choose a category</option>
-                    {categories.map(([v, label]) => (
+                    {projectCategories.map(([v, label]) => (
                       <option key={v} value={v}>
                         {label}
                       </option>
@@ -556,6 +560,10 @@ export default function AdminOpportunitiesPage() {
                     The linked role is fixed after first publication.
                   </p>
                 )}
+                <div className="mt-2 flex flex-wrap gap-4 text-sm text-cyan-300">
+                  <Link href="/admin/work-positions" target="_blank" rel="noopener noreferrer" className="underline">Manage job roles in a new tab</Link>
+                  <button type="button" onClick={refresh} className="underline">Refresh role choices</button>
+                </div>
                 {roleError && (
                   <p className="mt-2 text-sm text-amber-200" role="alert">
                     Work roles could not load.{" "}
@@ -569,6 +577,12 @@ export default function AdminOpportunitiesPage() {
                   </p>
                 )}
               </Mode>
+              {!draft.applyEnabled && draft.workPositionId && (
+                <div className="mb-3 text-sm text-slate-300">
+                  Linked role: {selectedRole?.title ?? "Previously linked role"}. Applications are closed.
+                  {!existing?.firstPublishedAt && <button type="button" onClick={() => change("workPositionId", "")} className="ml-2 text-cyan-300 underline">Unlink role</button>}
+                </div>
+              )}
               <Mode
                 label="Rent project"
                 checked={draft.rentEnabled}
@@ -671,18 +685,16 @@ export default function AdminOpportunitiesPage() {
                     Publish opportunity
                   </button>
                 )}
-                {existing && existing.status !== "archived" && (
-                  <button
-                    type="button"
-                    onClick={archive}
-                    className="rounded-lg px-3 py-2 text-sm text-amber-300 hover:underline"
-                  >
-                    Archive listing
-                  </button>
-                )}
               </div>
             )}
           </fieldset>
+          {existing && <div className="mt-4 flex flex-wrap gap-3">
+            {!sold && existing.status !== "draft" && <button type="button" className={secondary} disabled={busy} onClick={() => changeVisibility("draft")}>Move to draft</button>}
+            {existing.status !== "archived" && <button type="button" className={secondary} disabled={busy} onClick={() => changeVisibility("archived")}>Archive listing</button>}
+            {conflict && <button type="button" className={secondary} disabled={busy} onClick={() => {
+              if (window.confirm("Replace your unsaved edits with the latest saved listing?")) void openListing(existing._id);
+            }}>Reload saved listing</button>}
+          </div>}
         </form>
       )}
     </div>

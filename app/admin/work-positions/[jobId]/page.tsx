@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 
 /**
@@ -54,6 +54,8 @@ type TrainingMaterial = {
 
 type JobRole = {
   _id: string;
+  revision?: string;
+  updatedAt?: string;
   title: string;
   category: string;
   description?: string;
@@ -148,9 +150,18 @@ export default function AdminJobRolePage() {
   const [stats, setStats] = useState<JobStats | null>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [jobError, setJobError] = useState("");
+  const [applicantsError, setApplicantsError] = useState("");
+  const [applicantPage, setApplicantPage] = useState(1);
+  const [applicantPages, setApplicantPages] = useState(1);
+  const [applicantLoading, setApplicantLoading] = useState(true);
+  const [applicantVersion, setApplicantVersion] = useState(0);
   const [activeTab, setActiveTab] = useState<LifecycleTab>("applicants");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [saving, setSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
+  const [settingsConflict, setSettingsConflict] = useState(false);
+  const [screeningLoadError, setScreeningLoadError] = useState(false);
 
   // Training materials form
   const [trainingForm, setTrainingForm] = useState<TrainingMaterial[]>([]);
@@ -195,6 +206,9 @@ export default function AdminJobRolePage() {
         true,
       );
       setJob(res.job);
+      setJobError("");
+      setSettingsError("");
+      setSettingsConflict(false);
       setStats(res.stats);
       setTrainingForm(res.job.trainingMaterials || []);
       setSelectedScreeningId(res.job.screeningId?._id || "");
@@ -210,25 +224,42 @@ export default function AdminJobRolePage() {
             : [],
       );
     } catch (e: any) {
-      toast(e?.message || "Failed to load job role", "error");
+      setJobError(e instanceof Error ? e.message : "The role could not be loaded.");
     } finally {
       setLoading(false);
     }
   };
 
-  const loadApplicants = async (status?: string) => {
-    if (!jobId) return;
-    try {
-      const url =
-        status && status !== "all"
-          ? `/api/admin/workspace/job/${jobId}/applicants?workerStatus=${status}`
-          : `/api/admin/workspace/job/${jobId}/applicants`;
-      const res = await apiRequest(url, "GET", null, true);
-      setApplicants(res.applicants || []);
-    } catch (e: any) {
-      console.error("Failed to load applicants:", e);
-    }
-  };
+  const pagedTab = activeTab === "applicants" || activeTab === "ready" || activeTab === "screening" || activeTab === "active";
+  const applicantStatuses = activeTab === "ready" ? "ready_to_work"
+    : activeTab === "active" ? "assigned,working"
+    : activeTab === "screening" ? "screening_unlocked,test_submitted,training_viewed,failed"
+    : statusFilter === "all" ? "" : statusFilter;
+  const reloadApplicants = () => setApplicantVersion(current => current + 1);
+
+  useEffect(() => {
+    if (!jobId || !pagedTab) return;
+    let current = true;
+    const query = new URLSearchParams({ page: String(applicantPage), limit: "20" });
+    if (applicantStatuses) query.set("workerStatus", applicantStatuses);
+    setApplicantsError("");
+    setApplicantLoading(true);
+    apiRequest<{ applicants: Applicant[]; pages: number }>(
+      `/api/admin/workspace/job/${jobId}/applicants?${query}`, "GET", null, true,
+    ).then(result => {
+      if (!current) return;
+      if (!Array.isArray(result.applicants) || !Number.isInteger(result.pages)) throw new Error("Applicant results could not be read.");
+      const pages = Math.max(1, result.pages);
+      setApplicantPages(pages);
+      setApplicants(result.applicants);
+      if (applicantPage > pages) setApplicantPage(pages);
+    }).catch(error => {
+      if (current) setApplicantsError(error instanceof Error ? error.message : "Role applicants could not be loaded.");
+    }).finally(() => {
+      if (current) setApplicantLoading(false);
+    });
+    return () => { current = false; };
+  }, [jobId, pagedTab, applicantStatuses, applicantPage, applicantVersion]);
 
   const loadScreenings = async () => {
     try {
@@ -239,21 +270,20 @@ export default function AdminJobRolePage() {
         true,
       );
       setScreenings(res.screenings || []);
+      setScreeningLoadError(false);
     } catch (e: any) {
+      setScreeningLoadError(true);
       console.error("Failed to load screenings:", e);
     }
   };
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "settings") setActiveTab("settings");
     loadJob();
-    loadApplicants();
     loadProjects();
     loadScreenings();
   }, [jobId]);
 
-  useEffect(() => {
-    loadApplicants(statusFilter);
-  }, [statusFilter]);
 
   // Admin actions
   const approveApplicant = async (applicantId: string) => {
@@ -266,7 +296,7 @@ export default function AdminJobRolePage() {
         true,
       );
       toast("Applicant approved", "success");
-      loadApplicants(statusFilter);
+      reloadApplicants();
       loadJob();
     } catch (e: any) {
       toast(e?.message || "Failed to approve", "error");
@@ -285,7 +315,7 @@ export default function AdminJobRolePage() {
         true,
       );
       toast("Applicant rejected", "success");
-      loadApplicants(statusFilter);
+      reloadApplicants();
       loadJob();
     } catch (e: any) {
       toast(e?.message || "Failed to reject", "error");
@@ -304,7 +334,7 @@ export default function AdminJobRolePage() {
         true,
       );
       toast("Screening unlocked", "success");
-      loadApplicants(statusFilter);
+      reloadApplicants();
       loadJob();
     } catch (e: any) {
       toast(e?.message || "Failed to unlock screening", "error");
@@ -331,7 +361,7 @@ export default function AdminJobRolePage() {
         true,
       );
       toast(`Status set to ${STATUS_LABELS[workerStatus]}`, "success");
-      loadApplicants(statusFilter);
+      reloadApplicants();
       loadJob();
     } catch (e: any) {
       toast(e?.message || "Failed to update status", "error");
@@ -341,20 +371,36 @@ export default function AdminJobRolePage() {
   };
 
   const saveTrainingMaterials = async () => {
+    if (!job || saving) return;
+    const version = job.revision ?? job.updatedAt;
+    if (!version) { setSettingsConflict(true); setSettingsError("Reload the role to obtain its current version."); return; }
+    for (const material of trainingForm) {
+      let url: URL | null = null;
+      try { url = new URL(material.url.trim()); } catch { /* Show field guidance below. */ }
+      if (!material.title.trim() || !url || url.protocol !== "https:" || url.username || url.password) {
+        setSettingsError("Enter a title and a valid HTTPS URL without embedded credentials for each training material."); return;
+      }
+    }
     setSaving(true);
+    setSettingsError("");
     try {
-      await apiRequest(
+      const result = await apiRequest<{ job: JobRole }>(
         `/api/admin/workspace/job/${jobId}/set-training`,
         "PUT",
         {
-          trainingMaterials: trainingForm,
+          expectedRevision: version,
+          trainingMaterials: trainingForm.map(({ title, type, url, description }) => ({
+            title: title.trim(), type, url: url.trim(), description: description?.trim() || "",
+          })),
         },
         true,
       );
       toast("Training materials saved", "success");
-      loadJob();
-    } catch (e: any) {
-      toast(e?.message || "Failed to save", "error");
+      setJob(current => current && ({ ...current, revision: result.job.revision ?? result.job.updatedAt, updatedAt: result.job.updatedAt, trainingMaterials: result.job.trainingMaterials }));
+      setTrainingForm(result.job.trainingMaterials || []);
+    } catch (e) {
+      setSettingsError(e instanceof Error ? e.message : "Failed to save training.");
+      setSettingsConflict(e instanceof ApiError && e.status === 409);
     } finally {
       setSaving(false);
     }
@@ -373,28 +419,33 @@ export default function AdminJobRolePage() {
     field: keyof TrainingMaterial,
     value: string,
   ) => {
-    const updated = [...trainingForm];
-    (updated[idx] as any)[field] = value;
-    setTrainingForm(updated);
+    setTrainingForm(items => items.map((item, index) => index === idx ? { ...item, [field]: value } : item));
   };
 
   // PATCH_52A + PATCH_89: Screening selection functions (multi-screening)
   const saveScreeningSelection = async () => {
+    if (!job || saving || screeningLoadError) return;
+    const version = job.revision ?? job.updatedAt;
+    if (!version) { setSettingsConflict(true); setSettingsError("Reload the role to obtain its current version."); return; }
     setSaving(true);
+    setSettingsError("");
     try {
-      await apiRequest(
+      const result = await apiRequest<{ job: JobRole }>(
         `/api/admin/workspace/job/${jobId}/set-screening`,
         "PUT",
         {
           screeningIds: selectedScreeningIds,
           screeningId: selectedScreeningIds[0] || null,
+          expectedRevision: version,
         },
         true,
       );
       toast("Screening updated", "success");
-      loadJob();
-    } catch (e: any) {
-      toast(e?.message || "Failed to update screening", "error");
+      setSelectedScreeningId(selectedScreeningIds[0] || "");
+      setJob(current => current && ({ ...current, revision: result.job.revision ?? result.job.updatedAt, updatedAt: result.job.updatedAt, hasScreening: selectedScreeningIds.length > 0, screeningId: screenings.find(item => item._id === selectedScreeningIds[0]) }));
+    } catch (e) {
+      setSettingsError(e instanceof Error ? e.message : "Failed to save screenings.");
+      setSettingsConflict(e instanceof ApiError && e.status === 409);
     } finally {
       setSaving(false);
     }
@@ -420,7 +471,7 @@ export default function AdminJobRolePage() {
     } catch (e: any) {
       setProjects([]);
       setProjectsLockedReason(
-        "LOCKED: Projects are unavailable for this job role in the deployed backend (or you lack access). Required to unlock: backend must support /api/admin/workspace/job/:jobId/projects and your admin token must have permission.",
+        e instanceof Error ? e.message : "Role projects could not be loaded.",
       );
     }
   };
@@ -576,11 +627,12 @@ export default function AdminJobRolePage() {
     );
   }
 
-  if (!job) {
+  if (jobError || !job) {
     return (
       <div className="u-container max-w-6xl">
         <div className="card text-center py-8">
-          <p className="text-red-400">Job role not found</p>
+          <p role="alert" className="text-red-400">{jobError || "Job role not found."}</p>
+          <button type="button" onClick={loadJob} className="btn-secondary mr-2 mt-4">Retry role</button>
           <Link
             href="/admin/work-positions"
             className="btn-secondary mt-4 inline-block"
@@ -609,6 +661,7 @@ export default function AdminJobRolePage() {
               Category: {job.category}
             </p>
           </div>
+          <Link href={`/admin/work-positions?edit=${job._id}`} className="btn-secondary text-sm">Edit role details</Link>
           <div
             className={`px-3 py-1 rounded-full text-sm ${job.active ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-500/20 text-slate-300"}`}
           >
@@ -683,7 +736,7 @@ export default function AdminJobRolePage() {
                       {stats.readyToWork} worker
                       {stats.readyToWork > 1 ? "s" : ""}
                     </span>{" "}
-                    passed screening — assign projects in{" "}
+                    ready for assignment. Open the{" "}
                     <span className="font-medium">Ready to Work</span> tab
                   </span>
                 )}
@@ -726,7 +779,7 @@ export default function AdminJobRolePage() {
             id: "applicants",
             label: "Applicants",
             icon: "📝",
-            count: stats?.applied || 0,
+            count: stats?.totalApplicants || 0,
           },
           {
             id: "screening",
@@ -747,12 +800,12 @@ export default function AdminJobRolePage() {
             icon: "⚡",
             count: (stats?.assigned || 0) + (stats?.working || 0),
           },
-          { id: "completed", label: "Completed", icon: "🏆", count: 0 },
+          { id: "completed", label: "Completed", icon: "🏆", count: null },
           { id: "settings", label: "Settings", icon: "⚙️", count: null },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as LifecycleTab)}
+            onClick={() => { setApplicantPage(1); setActiveTab(tab.id as LifecycleTab); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition whitespace-nowrap flex items-center gap-2 ${
               activeTab === tab.id
                 ? "bg-white/10 text-white border border-white/20"
@@ -771,14 +824,17 @@ export default function AdminJobRolePage() {
       </div>
 
       {/* Applicants Tab - PATCH_61: Enhanced with Worker 360 links */}
-      {activeTab === "applicants" && (
+      {pagedTab && applicantLoading && <p role="status" className="card mb-4">Loading applicants…</p>}
+      {pagedTab && !applicantLoading && !applicantsError && applicantPages > 1 && <nav aria-label="Role applicant pages" className="mb-4 flex items-center gap-3"><button type="button" className="btn-secondary" disabled={applicantPage <= 1} onClick={() => setApplicantPage(n => n - 1)}>Previous page</button><span>Page {applicantPage} of {applicantPages}</span><button type="button" className="btn-secondary" disabled={applicantPage >= applicantPages} onClick={() => setApplicantPage(n => n + 1)}>Next page</button></nav>}
+      {pagedTab && applicantsError && <div role="alert" className="card mb-4">{applicantsError} <button onClick={reloadApplicants} className="underline">Retry applicants</button></div>}
+      {!applicantLoading && !applicantsError && activeTab === "applicants" && (
         <div className="space-y-4">
           {/* Filter for pending applications */}
           <div className="flex gap-2 flex-wrap items-center justify-between">
             <div className="flex gap-2">
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => { setApplicantPage(1); setStatusFilter(e.target.value); }}
                 className="bg-[#1f2937] border border-white/10 rounded-lg px-3 py-2 text-sm"
               >
                 <option value="all">All Statuses</option>
@@ -786,7 +842,7 @@ export default function AdminJobRolePage() {
               </select>
             </div>
             <p className="text-sm text-slate-400">
-              {applicants.filter((a) => a.workerStatus === "applied").length}{" "}
+              {stats?.applied ?? 0}{" "}
               pending approval
             </p>
           </div>
@@ -889,7 +945,7 @@ export default function AdminJobRolePage() {
       )}
 
       {/* PATCH_61: Screening Tab - Workers in screening phase */}
-      {activeTab === "screening" && (
+      {!applicantLoading && !applicantsError && activeTab === "screening" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -958,7 +1014,8 @@ export default function AdminJobRolePage() {
                 ⚠️ No screening test assigned to this job role
               </p>
               <Link
-                href="/admin/workspace/screenings"
+                href={`/admin/work-positions/${jobId}?tab=settings`}
+                onClick={() => setActiveTab("settings")}
                 className="text-sm text-amber-400 hover:underline mt-1 inline-block"
               >
                 Assign a screening in Settings →
@@ -1083,14 +1140,13 @@ export default function AdminJobRolePage() {
       )}
 
       {/* PATCH_61: Ready to Work Tab */}
-      {activeTab === "ready" && (
+      {!applicantLoading && !applicantsError && activeTab === "ready" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-semibold">✅ Ready to Work</h3>
               <p className="text-sm text-slate-400 mt-1">
-                Workers who passed screening and are ready for project
-                assignment
+                Approved workers ready for project assignment
               </p>
             </div>
           </div>
@@ -1101,7 +1157,7 @@ export default function AdminJobRolePage() {
               <div className="text-4xl mb-3">🎯</div>
               <p className="text-slate-400">No workers ready for assignment</p>
               <p className="text-sm text-slate-500 mt-1">
-                Workers will appear here after passing screening
+                Workers appear here once approved and ready for assignment
               </p>
             </div>
           ) : (
@@ -1129,7 +1185,7 @@ export default function AdminJobRolePage() {
                         </p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-300">
-                            ✓ Screening Passed
+                            Ready for assignment
                           </span>
                         </div>
                       </div>
@@ -1157,7 +1213,7 @@ export default function AdminJobRolePage() {
       )}
 
       {/* PATCH_61: Active Workers Tab */}
-      {activeTab === "active" && (
+      {!applicantLoading && !applicantsError && activeTab === "active" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -1280,6 +1336,11 @@ export default function AdminJobRolePage() {
       {/* PATCH_61: Settings Tab - Screening, Training, Projects */}
       {activeTab === "settings" && (
         <div className="space-y-6">
+          {settingsError && <div className="rounded border border-rose-800 p-3" role="alert">
+            <p>{settingsError}</p>{settingsConflict && <button type="button" className="mt-2 underline" onClick={() => {
+              if (window.confirm("Replace your unsaved screening and training changes with the latest saved settings?")) void loadJob();
+            }}>Reload saved settings</button>}
+          </div>}
           {/* Screening Selection — PATCH_89: Multi-select */}
           <div className="card">
             <div className="flex items-center justify-between mb-4">
@@ -1292,7 +1353,7 @@ export default function AdminJobRolePage() {
               </Link>
             </div>
 
-            {screenings.length === 0 ? (
+            {screeningLoadError ? <div role="alert">Screenings could not be loaded. <button onClick={loadScreenings} className="underline">Retry screenings</button></div> : screenings.length === 0 ? (
               <p className="text-sm text-slate-400">
                 No screening tests available.{" "}
                 <Link
@@ -1328,6 +1389,17 @@ export default function AdminJobRolePage() {
               </div>
             )}
 
+            {selectedScreeningIds.length > 0 && <ol aria-label="Assigned screening order" className="mt-3 space-y-2">
+              {selectedScreeningIds.map((id, index) => <li key={id} className="flex flex-wrap items-center gap-3 text-sm">
+                <span>{index + 1}. {screenings.find(s => s._id === id)?.title || "Unavailable screening"}</span>
+                {([-1, 1] as const).map(direction => <button key={direction} type="button" className="text-cyan-300 disabled:opacity-30"
+                  disabled={saving || index + direction < 0 || index + direction >= selectedScreeningIds.length}
+                  aria-label={`Move screening ${index + 1} ${direction < 0 ? "up" : "down"}`} onClick={() => {
+                    setSelectedScreeningIds(ids => { const reordered = [...ids]; [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]]; return reordered; });
+                  }}>{direction < 0 ? "Up" : "Down"}</button>)}
+                <button type="button" className="text-rose-300" onClick={() => toggleJobScreeningId(id)}>Remove</button>
+              </li>)}
+            </ol>}
             <div className="flex items-center justify-between mt-3">
               <span className="text-xs text-slate-400">
                 {selectedScreeningIds.length} screening(s) selected — workers
@@ -1335,7 +1407,7 @@ export default function AdminJobRolePage() {
               </span>
               <button
                 onClick={saveScreeningSelection}
-                disabled={saving}
+                disabled={saving || screeningLoadError || settingsConflict}
                 className="btn-primary px-6 disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save Screenings"}
@@ -1349,6 +1421,7 @@ export default function AdminJobRolePage() {
               <h3 className="font-semibold">📚 Training Materials</h3>
               <button
                 onClick={addTrainingMaterial}
+                disabled={trainingForm.length >= 50 || saving}
                 className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-300 text-sm hover:bg-blue-500/30"
               >
                 + Add Material
@@ -1369,6 +1442,8 @@ export default function AdminJobRolePage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <input
                         type="text"
+                        aria-label={`Training title ${idx + 1}`}
+                        maxLength={160}
                         placeholder="Title"
                         value={m.title}
                         onChange={(e) =>
@@ -1377,6 +1452,7 @@ export default function AdminJobRolePage() {
                         className="bg-[#1f2937] border border-white/10 rounded-lg px-3 py-2 text-sm"
                       />
                       <select
+                        aria-label={`Training type ${idx + 1}`}
                         value={m.type}
                         onChange={(e) =>
                           updateTrainingMaterial(idx, "type", e.target.value)
@@ -1389,6 +1465,8 @@ export default function AdminJobRolePage() {
                       </select>
                       <input
                         type="url"
+                        aria-label={`Training URL ${idx + 1}`}
+                        maxLength={2048}
                         placeholder="URL"
                         value={m.url}
                         onChange={(e) =>
@@ -1397,6 +1475,9 @@ export default function AdminJobRolePage() {
                         className="bg-[#1f2937] border border-white/10 rounded-lg px-3 py-2 text-sm"
                       />
                     </div>
+                    <label className="mt-2 block text-sm">Training description {idx + 1}
+                      <textarea aria-label={`Training description ${idx + 1}`} className="u-input mt-1 w-full" rows={2} maxLength={2000} value={m.description || ""} onChange={e => updateTrainingMaterial(idx, "description", e.target.value)} />
+                    </label>
                     <button
                       onClick={() => removeTrainingMaterial(idx)}
                       className="text-red-400 text-xs mt-2 hover:text-red-300"
@@ -1411,7 +1492,7 @@ export default function AdminJobRolePage() {
             <div className="mt-4 pt-4 border-t border-white/10">
               <button
                 onClick={saveTrainingMaterials}
-                disabled={saving}
+                disabled={saving || settingsConflict}
                 className="btn-primary disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save Training Materials"}
@@ -1449,13 +1530,14 @@ export default function AdminJobRolePage() {
 
             {projectsLockedReason && (
               <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-amber-100">
-                <p className="font-semibold">Locked</p>
+                <p className="font-semibold">Projects unavailable</p>
                 <p className="text-sm mt-1">{projectsLockedReason}</p>
+                <button onClick={loadProjects} className="underline">Retry projects</button>
               </div>
             )}
 
             {/* PROJECT LIST */}
-            {projectMode === "list" &&
+            {projectMode === "list" && !projectsLockedReason &&
               (projects.length === 0 ? (
                 <div className="text-center py-8 text-slate-400">
                   <div className="text-4xl mb-3">📦</div>

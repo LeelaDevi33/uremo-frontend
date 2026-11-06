@@ -1,6 +1,7 @@
 export type ListingStatus = "draft" | "published" | "archived";
 export type Opportunity = {
   _id: string;
+  revision: string;
   title: string;
   description: string;
   category: string;
@@ -19,6 +20,10 @@ export type Opportunity = {
 };
 export type OpportunityDetail = Opportunity & { deliverable: string };
 export type WorkRole = { _id: string; title: string; active?: boolean };
+export const projectCategories = [
+  ["development", "Development"], ["design", "Design"], ["operations", "Operations"],
+  ["writing", "Writing"], ["data", "Data"], ["research", "Research"], ["other", "Other project work"],
+] as const;
 export type Draft = {
   title: string;
   description: string;
