@@ -6,8 +6,11 @@
  * Modern, clean, conversion-focused design
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { apiRequest } from "@/lib/api";
+import { linkedApplicationPosition } from "@/lib/applicationLink";
 import { useToast } from "@/hooks/useToast";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
@@ -87,6 +90,7 @@ interface Application {
   _id: string;
   status: "pending" | "approved" | "rejected";
   positionTitle?: string;
+  position?: string | { _id: string } | null;
   category?: string;
   createdAt?: string;
 }
@@ -98,22 +102,33 @@ type WorkPosition = {
   description?: string;
   requirements?: string;
   active?: boolean;
+  serviceId?: string | { _id: string } | null;
   screeningRequired?: boolean;
 };
 
 export default function ApplyToWorkPage() {
+  return <Suspense fallback={<p className="p-6">Loading positions…</p>}><ApplicationEntry /></Suspense>;
+}
+
+function ApplicationEntry() {
+  const query = useSearchParams().toString();
+  return <ApplicationForm key={query} query={query} />;
+}
+
+function ApplicationForm({ query }: { query: string }) {
+  const params = useMemo(() => new URLSearchParams(query), [query]);
   const { toast } = useToast();
   const { data: settings } = useSiteSettings();
 
   const ui =
     settings?.applyWork?.ui || DEFAULT_PUBLIC_SITE_SETTINGS.applyWork.ui;
 
-  const [requestedPositionId, setRequestedPositionId] = useState<string>("");
-
   const [positions, setPositions] = useState<WorkPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
+  const [positionsFailed, setPositionsFailed] = useState(false);
   const [positionId, setPositionId] = useState<string>("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState(params.get("category")?.trim() || "all");
+  const linkedPosition = linkedApplicationPosition(positions, params);
 
   const [showForm, setShowForm] = useState(false);
 
@@ -122,33 +137,6 @@ export default function ApplyToWorkPage() {
   const [loading, setLoading] = useState(false);
   const [existing, setExisting] = useState<Application | null>(null);
   const [checking, setChecking] = useState(true);
-
-  // PATCH_47: Service context when coming from a service page
-  const [serviceId, setServiceId] = useState<string>("");
-  const [serviceTitle, setServiceTitle] = useState<string>("");
-  const [fromService, setFromService] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      setRequestedPositionId(params.get("positionId") || "");
-
-      const requestedCategory = String(params.get("category") || "").trim();
-      if (requestedCategory) {
-        setCategoryFilter(requestedCategory);
-      }
-
-      // PATCH_47: Capture service context
-      const svcId = params.get("serviceId") || "";
-      const svcTitle = params.get("serviceTitle") || "";
-      setServiceId(svcId);
-      setServiceTitle(svcTitle);
-      setFromService(!!svcId);
-    } catch {
-      setRequestedPositionId("");
-    }
-  }, []);
 
   const applyFaq =
     settings?.applyWork?.faq && settings.applyWork.faq.length
@@ -173,11 +161,12 @@ export default function ApplyToWorkPage() {
   }, [positions]);
 
   const filteredPositions = useMemo(() => {
+    if (linkedPosition !== undefined) return linkedPosition ? [linkedPosition] : [];
     return positions.filter((p) => {
       if (categoryFilter === "all") return true;
       return String(p.category || "") === categoryFilter;
     });
-  }, [positions, categoryFilter]);
+  }, [positions, categoryFilter, linkedPosition]);
 
   const hasPositions = positions.length > 0;
 
@@ -196,6 +185,7 @@ export default function ApplyToWorkPage() {
 
   const loadPositions = async () => {
     setPositionsLoading(true);
+    setPositionsFailed(false);
     try {
       const data = await apiRequest<WorkPosition[]>(
         "/api/work-positions",
@@ -213,29 +203,18 @@ export default function ApplyToWorkPage() {
         setCategoryFilter("all");
       }
 
-      const preferredId = requestedPositionId.trim();
-      if (preferredId && activeOnly.some((p) => p._id === preferredId)) {
-        setPositionId(preferredId);
-      }
     } catch {
       setPositions([]);
+      setPositionsFailed(true);
     } finally {
       setPositionsLoading(false);
     }
   };
 
-  useEffect(() => {
-    const preferredId = requestedPositionId.trim();
-    if (!preferredId) return;
-    if (positions.some((p) => p._id === preferredId)) {
-      setPositionId(preferredId);
-    }
-  }, [requestedPositionId, positions]);
+  const selectedPosition = linkedPosition === undefined ? positionsById.get(positionId) : linkedPosition;
 
   const submit = async () => {
-    const selected = positionId ? positionsById.get(positionId) : null;
-
-    if (!selected) {
+    if (!selectedPosition) {
       toast(ui.selectPositionRequiredText, "error");
       return;
     }
@@ -246,7 +225,7 @@ export default function ApplyToWorkPage() {
     }
 
     const formData = new FormData();
-    if (selected?._id) formData.append("positionId", selected._id);
+    formData.append("positionId", selectedPosition._id);
     formData.append("message", message);
     formData.append("resume", resume);
 
@@ -273,7 +252,38 @@ export default function ApplyToWorkPage() {
     return <div className="p-6">{ui.loadingPositionsText}</div>;
   }
 
+  if (linkedPosition !== undefined && positionsLoading) {
+    return <p className="p-6">{ui.loadingPositionsText}</p>;
+  }
+
+  if (linkedPosition === null) {
+    return (
+      <div className="u-container max-w-2xl py-12">
+        <h1 className="text-2xl font-bold">{positionsFailed ? "Could not load the linked position" : "Linked position unavailable"}</h1>
+        <p className="mt-3 text-slate-300">
+          {positionsFailed ? "Try loading the positions again." : "This opportunity link could not be matched to a single open position."}
+        </p>
+        <div className="mt-6 flex gap-4">
+          {positionsFailed && <button className="btn-primary" onClick={loadPositions}>Try again</button>}
+          <Link className="btn-secondary" href="/apply-to-work">Browse all positions</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (existing) {
+    const existingPositionId = typeof existing.position === "string" ? existing.position : existing.position?._id;
+    if (linkedPosition && existingPositionId !== linkedPosition._id) {
+      return (
+        <div className="u-container max-w-2xl py-12">
+          <h1 className="text-2xl font-bold">You already have an application</h1>
+          <p className="mt-3 text-slate-300">
+            You opened the position for {linkedPosition.title}. View your existing application to check its position and status.
+          </p>
+          <Link className="btn-secondary mt-6 inline-block" href="/apply-to-work">View my application</Link>
+        </div>
+      );
+    }
     const statusColor = {
       pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       approved: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -373,9 +383,6 @@ export default function ApplyToWorkPage() {
     );
   }
 
-  // PATCH_56: Selected position for right panel
-  const selectedPosition = positionId ? positionsById.get(positionId) : null;
-
   return (
     <div className="min-h-screen">
       {/* Hero Header */}
@@ -402,7 +409,7 @@ export default function ApplyToWorkPage() {
             </div>
 
             {/* Category Filter */}
-            {categories.length > 1 && (
+            {!linkedPosition && categories.length > 1 && (
               <div className="flex items-center gap-2">
                 <FilterIcon className="w-4 h-4 text-slate-500" />
                 <select
@@ -422,27 +429,9 @@ export default function ApplyToWorkPage() {
         </div>
       </div>
 
-      {/* PATCH_47: Service context banner */}
-      {fromService && (
+      {linkedPosition && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <div className="rounded-xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 to-transparent p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">💼</span>
-              <div>
-                <p className="font-medium text-blue-300">
-                  Applying from Service
-                </p>
-                {serviceTitle && (
-                  <p className="text-sm text-slate-400">
-                    You're applying to work on:{" "}
-                    <span className="text-white font-medium">
-                      {serviceTitle}
-                    </span>
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          <Link className="text-emerald-400 hover:underline" href="/apply-to-work">Browse all positions</Link>
         </div>
       )}
 
@@ -503,7 +492,7 @@ export default function ApplyToWorkPage() {
                 </div>
               ) : (
                 filteredPositions.map((p) => {
-                  const isSelected = positionId === p._id;
+                  const isSelected = selectedPosition?._id === p._id;
                   return (
                     <button
                       key={p._id}

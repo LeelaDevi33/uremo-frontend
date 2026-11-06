@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
+import { applicationHref } from "@/lib/applicationLink";
 import { formatPrice } from "@/lib/orderPrice";
 import { useToast } from "@/hooks/useToast";
 import { withCacheBust } from "@/lib/cacheBust";
@@ -336,32 +337,10 @@ export default function ServiceDetailsPage() {
     }
   };
 
-  // PATCH_47: Apply to work with service context - passes serviceId to find linked job role
-  const applyToWork = async () => {
+  const applyToWork = () => {
     if (!ensureLoggedIn()) return;
-
-    try {
-      // Try to find the linked job role for this service
-      const jobRoleRes = await apiRequest(
-        `/api/work-positions/by-service/${service._id}`,
-        "GET",
-      );
-
-      if (jobRoleRes?.hasJobRole && jobRoleRes.position?._id) {
-        // Direct link to the specific job role
-        router.push(
-          `/apply-to-work?positionId=${jobRoleRes.position._id}&serviceId=${service._id}`,
-        );
-      } else {
-        // No linked job role, go to general apply page with service context
-        router.push(
-          `/apply-to-work?serviceId=${service._id}&serviceTitle=${encodeURIComponent(service.title)}`,
-        );
-      }
-    } catch {
-      // Fallback to general apply page
-      router.push("/apply-to-work");
-    }
+    const positionId = typeof service.linkedJobId === "string" ? service.linkedJobId : service.linkedJobId?._id;
+    router.push(applicationHref(service._id, positionId));
   };
 
   // PATCH_93: createDealOrder neutralized — deals not yet live.

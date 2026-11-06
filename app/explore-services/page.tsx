@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/api";
+import { applicationHref } from "@/lib/applicationLink";
 import { formatPrice } from "@/lib/orderPrice";
 import { onServicesRefresh } from "@/lib/events";
 import Link from "next/link";
@@ -1435,7 +1436,7 @@ export default function UnifiedMarketplacePage() {
                 <Link
                   href={
                     activeIntent === "earn"
-                      ? `/apply-to-work?serviceId=${previewService._id}`
+                      ? applicationHref(previewService._id, previewService.linkedJob?._id)
                       : activeIntent === "deal"
                         ? "/deals"
                         : activeIntent === "rent"
@@ -1488,9 +1489,7 @@ function ServiceCard({
   // PATCH_90: Only append rent/deal intent if the service actually supports it
   const getActionLink = () => {
     if (intent === "earn") {
-      return service.linkedJob?._id
-        ? `/apply-to-work?jobId=${service.linkedJob._id}`
-        : `/apply-to-work?serviceId=${service._id}`;
+      return applicationHref(service._id, service.linkedJob?._id);
     }
     // PATCH_92: Deal cards redirect to deals page
     if (intent === "deal") {
