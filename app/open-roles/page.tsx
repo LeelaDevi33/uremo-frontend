@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import OpportunityCatalog from "@/components/opportunities/OpportunityCatalog";
-import { LoadingState, MarketPage } from "@/components/opportunities/MarketUI";
+import OpenRolesBoard, { BoardLoading } from "@/components/opportunities/OpenRolesBoard";
 
-export const metadata: Metadata = { title: "Open roles", description: "Browse specializations and apply to an open role for free." };
+export const metadata: Metadata = { title: "Open roles", description: "Find an open specialization, read its responsibilities and requirements, and apply for free." };
 
 export default function CatalogPage() {
-  return <Suspense fallback={<MarketPage><LoadingState label="Loading…" /></MarketPage>}><OpportunityCatalog view="roles" /></Suspense>;
+  return <Suspense fallback={<BoardLoading />}><OpenRolesBoard /></Suspense>;
 }

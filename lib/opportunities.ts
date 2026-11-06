@@ -47,7 +47,19 @@ export function legacyCatalogPath(intent?: string) {
 }
 
 export type OpenRole = {
-  _id: string; title: string; category: string; description?: string; requirements?: string; active?: boolean;
+  _id: string;
+  title: string;
+  category: string;
+  description?: string;
+  requirements?: string;
+  experienceLevel?: "" | "entry" | "intermediate" | "advanced";
+  workMode?: "" | "remote" | "hybrid" | "onsite";
+  locationEligibility?: string;
+  timeCommitment?: string;
+  skills?: string[];
+  responsibilities?: string[];
+  hasScreening?: boolean;
+  active?: boolean;
 };
 const validId = (value?: string | null) => !!value && /^[a-f\d]{24}$/i.test(value);
 
