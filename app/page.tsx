@@ -518,7 +518,7 @@ export default function LandingPage() {
                 <p className="text-4xl md:text-5xl font-bold text-purple-400">
                   {stats.totalUsers}
                 </p>
-                <p className="text-slate-400 mt-2">Verified Users</p>
+                <p className="text-slate-400 mt-2">Registered Users</p>
               </div>
               <div>
                 <p className="text-4xl md:text-5xl font-bold text-amber-400">
@@ -593,8 +593,8 @@ export default function LandingPage() {
             Start Your Journey With UREMO Today
           </h2>
           <p className="text-slate-300 max-w-xl mx-auto mb-8">
-            Join thousands of users who are already earning, learning, and
-            building their digital careers on UREMO.
+            Create an account to apply for work, track your orders, and manage
+            your wallet.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

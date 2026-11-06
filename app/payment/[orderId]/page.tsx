@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
+import { formatOrderPrice, getOrderPrice } from "@/lib/orderPrice";
+import { orderPaymentState } from "@/lib/orderPaymentState";
 import { useToast } from "@/hooks/useToast";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
@@ -36,7 +38,7 @@ export default function PaymentPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // PATCH_23: Wallet balance state
-  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletLoading, setWalletLoading] = useState(false);
 
   const paymentFaq =
@@ -56,7 +58,7 @@ export default function PaymentPage() {
       msg.includes("token") ||
       msg.includes("login")
     ) {
-      router.push("/login");
+      router.replace(`/login?next=${encodeURIComponent(`/payment/${resolvedOrderId}`)}`);
       return true;
     }
     return false;
@@ -100,11 +102,10 @@ export default function PaymentPage() {
     apiRequest("/api/wallet/balance", "GET")
       .then((res) => {
         if (!mounted) return;
-        setWalletBalance(res.balance || 0);
+        setWalletBalance(typeof res?.balance === "number" && Number.isFinite(res.balance) ? res.balance : null);
       })
       .catch(() => {
-        // Ignore if wallet balance fails
-        setWalletBalance(0);
+        if (mounted) setWalletBalance(null);
       });
 
     return () => {
@@ -122,18 +123,24 @@ export default function PaymentPage() {
   };
 
   // PATCH_23: Pay with wallet handler
+  const price = getOrderPrice(order);
+  const canPayByWallet = price !== null && price.currency === "USD" && price.amount > 0 &&
+    order?.status === "pending";
   const payWithWallet = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !canPayByWallet || !price || walletBalance === null || walletLoading) return;
 
-    const orderPrice = order?.serviceId?.price || order?.totalPrice || 0;
-    if (walletBalance < orderPrice) {
+    if (walletBalance < price.amount) {
       toast("Insufficient wallet balance", "error");
       return;
     }
 
     setWalletLoading(true);
     try {
-      await apiRequest("/api/wallet/pay", "POST", { orderId: resolvedOrderId });
+      await apiRequest("/api/wallet/pay", "POST", {
+        orderId: resolvedOrderId,
+        expectedAmount: price.amount,
+        expectedCurrency: price.currency,
+      }, true);
       toast("Payment successful! Redirecting...", "success");
       router.push(`/orders/${resolvedOrderId}?chat=1`);
     } catch (e: any) {
@@ -150,7 +157,8 @@ export default function PaymentPage() {
     new Date(order.expiresAt).getTime() < Date.now();
 
   const canSubmit =
-    (status === "pending" || status === "cancelled") && !isExpired;
+    order && orderPaymentState(order) === "unpaid" && !isExpired &&
+    order._id === resolvedOrderId && price !== null;
   const isSubmitted = status === "waiting_user";
 
   const hasMethod = Boolean(selectedMethodId);
@@ -327,7 +335,7 @@ export default function PaymentPage() {
             <div className="mt-1 flex items-center justify-between gap-3">
               <p className="text-slate-200">{order.serviceId?.title}</p>
               <p className="text-emerald-300 font-semibold">
-                ${order.serviceId?.price}
+                {formatOrderPrice(price)}
               </p>
             </div>
             <p className="mt-1 text-xs text-[#9CA3AF]">
@@ -374,7 +382,7 @@ export default function PaymentPage() {
       )}
 
       {/* PATCH_23: Pay with Wallet Option */}
-      {canSubmit && (
+      {canSubmit && canPayByWallet && price && (
         <div className="card border border-emerald-500/30 bg-emerald-500/10">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -384,16 +392,16 @@ export default function PaymentPage() {
               <p className="text-sm text-emerald-200/80 mt-1">
                 Your wallet balance:{" "}
                 <span className="font-semibold">
-                  ${walletBalance.toFixed(2)}
+                  {walletBalance === null ? "Unavailable" : `$${walletBalance.toFixed(2)}`}
                 </span>
               </p>
-              {walletBalance <= 0 && (
+              {walletBalance !== null && walletBalance <= 0 && (
                 <p className="text-xs text-emerald-200/70 mt-1">
                   Add funds to enable wallet payment for this order.
                 </p>
               )}
             </div>
-            {walletBalance >= (order?.serviceId?.price || 0) ? (
+            {walletBalance !== null && (walletBalance >= price.amount ? (
               <button
                 onClick={payWithWallet}
                 disabled={walletLoading}
@@ -408,19 +416,19 @@ export default function PaymentPage() {
               >
                 Add Balance
               </button>
-            )}
+            ))}
           </div>
-          {walletBalance < (order?.serviceId?.price || 0) && (
+          {walletBalance !== null && walletBalance < price.amount && (
             <p className="text-xs text-emerald-200/60 mt-2">
               Need $
-              {((order?.serviceId?.price || 0) - walletBalance).toFixed(2)} more
+              {(price.amount - walletBalance).toFixed(2)} more
             </p>
           )}
         </div>
       )}
 
       {/* Divider for OR */}
-      {canSubmit && (
+      {canSubmit && canPayByWallet && (
         <div className="flex items-center gap-4">
           <div className="flex-1 h-px bg-white/10" />
           <span className="text-sm text-[#9CA3AF]">or pay manually</span>

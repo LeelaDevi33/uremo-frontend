@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
+import { formatPrice } from "@/lib/orderPrice";
 import { useToast } from "@/hooks/useToast";
 import { withCacheBust } from "@/lib/cacheBust";
 import {
@@ -57,7 +58,7 @@ export default function ServiceDetailsPage() {
       if (!token) {
         const next =
           typeof window !== "undefined" && window.location?.pathname
-            ? window.location.pathname
+            ? window.location.pathname + window.location.search
             : `/services/${String(id || "")}`;
         if (typeof window !== "undefined") {
           window.location.href = `/login?next=${encodeURIComponent(next)}`;
@@ -203,7 +204,6 @@ export default function ServiceDetailsPage() {
       duration: plan.duration,
       unit: plan.unit || "days",
       label: plan.label || `${plan.duration} ${plan.unit || "days"}`,
-      perDay: plan.duration > 0 ? +(plan.price / plan.duration).toFixed(2) : 0,
     };
   }, [selectedRentalPlan, service?.rentalPlans]);
 
@@ -319,7 +319,7 @@ export default function ServiceDetailsPage() {
 
           const next =
             typeof window !== "undefined" && window.location?.pathname
-              ? window.location.pathname
+              ? window.location.pathname + window.location.search
               : `/services/${String(id || "")}`;
           if (typeof window !== "undefined") {
             window.location.href = `/login?next=${encodeURIComponent(next)}`;
@@ -642,7 +642,7 @@ export default function ServiceDetailsPage() {
               <div>
                 <p className="text-xs text-[#9CA3AF]">{copy.priceLabel}</p>
                 <p className="mt-0.5 text-2xl font-bold text-emerald-300">
-                  ${service.price}
+                  {formatPrice(service.price, service.currency)}
                 </p>
               </div>
               <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300">
@@ -759,13 +759,13 @@ export default function ServiceDetailsPage() {
                           )}
                         </div>
                         <span className="text-emerald-300 font-bold text-sm">
-                          ${plan.price}
+                          {formatPrice(plan.price, service.currency)}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 mt-0.5">
                         {plan.duration} {plan.unit || "days"}
                         {plan.duration > 0 &&
-                          ` · $${(plan.price / plan.duration).toFixed(2)}/day`}
+                          ` · ${formatPrice(plan.price / plan.duration, service.currency)}/${plan.unit === "months" ? "month" : "day"}`}
                       </p>
                     </button>
                   ))}
@@ -783,7 +783,7 @@ export default function ServiceDetailsPage() {
                     <div className="flex justify-between text-xs mt-1">
                       <span className="text-slate-300">Total</span>
                       <span className="text-emerald-300 font-bold">
-                        ${selectedPlanInfo.price}
+                        {formatPrice(selectedPlanInfo.price, service.currency)}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1.5">
@@ -809,7 +809,7 @@ export default function ServiceDetailsPage() {
                     : service?.active === false
                       ? "Unavailable"
                       : selectedRentalPlan !== null
-                        ? `Rent for $${service.rentalPlans[selectedRentalPlan]?.price}`
+                        ? `Rent for ${formatPrice(service.rentalPlans[selectedRentalPlan]?.price, service.currency)}`
                         : "Select a Plan"}
                 </button>
               </div>
@@ -831,7 +831,7 @@ export default function ServiceDetailsPage() {
                   ? "Processing…"
                   : service?.active === false
                     ? "Unavailable"
-                    : `Buy Now · $${service.price}`}
+                    : `Buy Now · ${formatPrice(service.price, service.currency)}`}
               </button>
             )}
 

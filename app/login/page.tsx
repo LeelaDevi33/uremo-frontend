@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
+import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
 
 // PATCH_54: Eye icons for password visibility
@@ -45,8 +46,9 @@ const EyeSlashIcon = () => (
   </svg>
 );
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
+  const next = authReturnPath(useSearchParams().get("next"));
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -108,7 +110,7 @@ export default function Login() {
 
       setAuthSession({ token: res.token, user: res.user });
       toast("Login successful!", "success");
-      router.push("/dashboard");
+      router.replace(next || "/dashboard");
     } catch (err: any) {
       // PATCH_54: Better error handling
       const message = err.message || "Login failed";
@@ -230,11 +232,19 @@ export default function Login() {
 
         <p className="text-sm mt-2 text-slate-400">
           Don't have an account?{" "}
-          <a href="/signup" className="text-indigo-400 hover:underline">
+          <a href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="text-indigo-400 hover:underline">
             Sign up
           </a>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<p className="p-6 text-slate-400">Loading login…</p>}>
+      <LoginForm />
+    </Suspense>
   );
 }

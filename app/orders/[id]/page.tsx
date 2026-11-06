@@ -10,6 +10,8 @@ import {
 } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ApiError, apiRequest } from "@/lib/api";
+import { formatOrderPrice, getOrderPrice } from "@/lib/orderPrice";
+import { orderPaymentState } from "@/lib/orderPaymentState";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -28,6 +30,12 @@ interface Order {
   _id: string;
   status: string;
   orderType?: "buy" | "rental" | "deal";
+  quotedAmount?: number;
+  quotedCurrency?: string;
+  settledAmount?: number;
+  settledCurrency?: string;
+  paymentStatus?: string;
+  paidAt?: string | null;
   country?: string;
   serviceId: {
     title: string;
@@ -254,8 +262,9 @@ function OrderDetailsContent() {
     return () => window.clearTimeout(id);
   }, [searchParams, loading, order]);
 
-  const isPendingPayment = order?.status === "pending";
-  const isPaymentVerified = Boolean(order?.payment?.verifiedAt);
+  const paymentState = order && orderPaymentState(order);
+  const isPendingPayment = order?.status === "pending" && paymentState === "unpaid";
+  const isPaymentVerified = paymentState === "paid";
   const expiresText = useMemo(() => {
     if (!isPendingPayment || !order?.expiresAt) return null;
     const expiresAt = new Date(order.expiresAt);
@@ -470,7 +479,7 @@ function OrderDetailsContent() {
           <div>
             <p className="text-[#9CA3AF] text-sm">{ui.amountLabel}</p>
             <p className="text-2xl font-bold text-[#22C55E]">
-              ${order.serviceId?.price}
+              {formatOrderPrice(getOrderPrice(order))}
             </p>
           </div>
 
@@ -485,6 +494,7 @@ function OrderDetailsContent() {
                   {ui.paymentVerifiedText}
                 </span>
               )}
+              {paymentState === "refunded" && <span className="text-sm text-slate-300">Refunded</span>}
             </div>
             {expiresText && (
               <p className="text-xs text-[#9CA3AF] mt-2">{expiresText}</p>
@@ -520,7 +530,7 @@ function OrderDetailsContent() {
             <div>
               <p className="text-[#9CA3AF] text-xs">Rental Price</p>
               <p className="text-sm font-bold text-emerald-300">
-                ${order.rentalId.price}
+                {formatOrderPrice(getOrderPrice(order))}
               </p>
             </div>
             <div>

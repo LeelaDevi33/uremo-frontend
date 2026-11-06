@@ -6,9 +6,10 @@
 // Auto-synced with backend via /api/services/marketplace
 // PATCH_54: Enhanced UX with action badges, intent-specific CTAs, friendly category labels
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getApiBaseUrl } from "@/lib/api";
+import { formatPrice } from "@/lib/orderPrice";
 import { onServicesRefresh } from "@/lib/events";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +25,19 @@ import {
 
 // Intent Types
 type Intent = "buy" | "earn" | "rent" | "deal";
+
+function isIntent(value: string | null): value is Intent {
+  return value === "buy" || value === "earn" || value === "rent" || value === "deal";
+}
+
+function recentServiceIds(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem("uremo_recent_services") || "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 // Service Type with unified fields
 type Service = {
@@ -64,6 +78,21 @@ type Service = {
   isRental?: boolean;
   effectiveCategory?: string;
 };
+
+function listingPrice(service: Service, intent: Intent) {
+  if (intent === "earn") {
+    return service.payRate && service.payRate > 0
+      ? `${formatPrice(service.payRate, service.currency)}/hr`
+      : "Rate unlisted";
+  }
+  if (intent === "rent") {
+    if (!service.rentalPlans?.length) return "Plan unavailable";
+    const cheapest = service.rentalPlans.reduce((a, b) => a.price <= b.price ? a : b);
+    const unit = cheapest.unit === "days" ? "day" : "month";
+    return `${formatPrice(cheapest.price, service.currency)} / ${cheapest.duration} ${unit}${cheapest.duration === 1 ? "" : "s"}`;
+  }
+  return formatPrice(service.price, service.currency);
+}
 
 type FiltersState = {
   category: string;
@@ -306,6 +335,8 @@ export default function UnifiedMarketplacePage() {
   // State
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const currentRequest = useRef<AbortController | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
     categories: [],
     countries: [],
@@ -318,7 +349,7 @@ export default function UnifiedMarketplacePage() {
     rent: 0,
     deal: 0,
   });
-  const [filters, setFilters] = useState<FiltersState>({
+  const [filters, updateFilters] = useState<FiltersState>({
     category: "",
     subcategory: "",
     platform: "",
@@ -336,28 +367,35 @@ export default function UnifiedMarketplacePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [previewService, setPreviewService] = useState<Service | null>(null);
 
+  function setFilters(next: Parameters<typeof updateFilters>[0]) {
+    setPage(1);
+    updateFilters(next);
+  }
+
   const servicesCopy =
     settings?.services?.list || DEFAULT_PUBLIC_SITE_SETTINGS.services.list;
 
   useEffect(() => {
-    const urlIntent = searchParams.get("intent") as Intent | null;
-    const storedIntent =
-      typeof window !== "undefined"
-        ? (localStorage.getItem("uremo_explore_intent") as Intent | null)
-        : null;
-    const nextIntent = urlIntent || storedIntent || "buy";
-    if (nextIntent !== activeIntent) {
-      setActiveIntent(nextIntent);
+    const urlIntent = searchParams.get("intent");
+    let intent: Intent = "buy";
+    if (isIntent(urlIntent)) intent = urlIntent;
+    else if (urlIntent === null) {
+      try {
+        const saved = localStorage.getItem("uremo_explore_intent");
+        if (isIntent(saved)) intent = saved;
+      } catch { /* The catalog also works without saved preferences. */ }
     }
+    setActiveIntent(intent);
+    setPage(1);
   }, [searchParams]);
 
   // Handle intent change
   const handleIntentChange = (intent: Intent) => {
     setActiveIntent(intent);
     setPage(1);
-    if (typeof window !== "undefined") {
+    try {
       localStorage.setItem("uremo_explore_intent", intent);
-    }
+    } catch { /* Browsing still works when storage is unavailable. */ }
     // Update URL without full reload
     const url = new URL(window.location.href);
     url.searchParams.set("intent", intent);
@@ -366,7 +404,11 @@ export default function UnifiedMarketplacePage() {
 
   // Fetch marketplace data
   const loadMarketplace = useCallback(async () => {
+    currentRequest.current?.abort();
+    const request = new AbortController();
+    currentRequest.current = request;
     setLoading(true);
+    setLoadFailed(false);
     try {
       const base = getApiBaseUrl();
       const params = new URLSearchParams();
@@ -396,25 +438,25 @@ export default function UnifiedMarketplacePage() {
         {
           cache: "no-store",
           credentials: "include",
+          signal: request.signal,
         },
       );
 
-      const data = await res
-        .json()
-        .catch(() => ({ services: [], filters: {}, intentCounts: {} }));
-
-      if (data.ok) {
-        setServices(data.services || []);
-        setFilterOptions(data.filters || filterOptions);
-        setIntentCounts(data.intentCounts || intentCounts);
-        setTotalPages(data.meta?.pages || 1);
-      } else {
-        setServices([]);
-      }
+      if (!res.ok) throw new Error("Catalog unavailable");
+      const data = await res.json();
+      if (request.signal.aborted) return;
+      if (!data?.ok || !Array.isArray(data.services)) throw new Error("Invalid catalog");
+      setServices(data.services);
+      if (data.filters) setFilterOptions(data.filters);
+      if (data.intentCounts) setIntentCounts(data.intentCounts);
+      setTotalPages(data.meta?.pages || 1);
     } catch {
+      if (request.signal.aborted) return;
       setServices([]);
+      setTotalPages(1);
+      setLoadFailed(true);
     } finally {
-      setLoading(false);
+      if (!request.signal.aborted) setLoading(false);
     }
   }, [activeIntent, filters, page]);
 
@@ -424,6 +466,7 @@ export default function UnifiedMarketplacePage() {
     const interval = setInterval(loadMarketplace, 30000);
     const cleanup = onServicesRefresh(() => loadMarketplace());
     return () => {
+      currentRequest.current?.abort();
       clearInterval(interval);
       cleanup();
     };
@@ -495,10 +538,7 @@ export default function UnifiedMarketplacePage() {
   }, [services]);
 
   const recommendedServices = useMemo(() => {
-    const recentIds: string[] =
-      typeof window !== "undefined"
-        ? JSON.parse(localStorage.getItem("uremo_recent_services") || "[]")
-        : [];
+    const recentIds = recentServiceIds();
 
     const byRecent = services.filter((s) => recentIds.includes(s._id));
     const byCountry = filters.country
@@ -523,14 +563,14 @@ export default function UnifiedMarketplacePage() {
 
   const trackRecentService = useCallback((serviceId: string) => {
     if (typeof window === "undefined") return;
-    const current = JSON.parse(
-      localStorage.getItem("uremo_recent_services") || "[]",
-    ) as string[];
+    const current = recentServiceIds();
     const next = [serviceId, ...current.filter((id) => id !== serviceId)].slice(
       0,
       10,
     );
-    localStorage.setItem("uremo_recent_services", JSON.stringify(next));
+    try {
+      localStorage.setItem("uremo_recent_services", JSON.stringify(next));
+    } catch { /* Viewing a service does not require storage. */ }
   }, []);
 
   const config = INTENT_CONFIG[activeIntent];
@@ -538,49 +578,14 @@ export default function UnifiedMarketplacePage() {
 
   return (
     <div className="u-container py-6 px-4 md:px-6">
-      {/* Hero Section — Compact & Professional */}
-      <section className="mb-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px] font-semibold uppercase tracking-wider">
-                Marketplace
-              </span>
-              <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-semibold flex items-center gap-1">
-                <CheckCircleIcon className="w-3 h-3" />
-                Verified
-              </span>
-              <span className="px-2.5 py-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px] font-semibold">
-                Trusted Platform
-              </span>
-            </div>
-
-            <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-2">
-              Discover Premium Services
-            </h1>
-            <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-              Buy verified services, earn money, rent premium access, or start
-              profit deals.
-            </p>
-          </div>
-
-          {/* Stats strip */}
-          <div className="flex items-center gap-5">
-            {[
-              { label: "Users", value: "18,450+" },
-              { label: "Paid Out", value: "$312K+" },
-              { label: "Rating", value: "4.8★" },
-            ].map((item) => (
-              <div key={item.label} className="text-center">
-                <div className="text-white font-bold text-lg">{item.value}</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider">
-                  {item.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <header className="mb-8 max-w-2xl">
+        <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-2">
+          Explore the marketplace
+        </h1>
+        <p className="text-slate-400 text-sm md:text-base">
+          Browse services, apply for work, compare rental plans, or explore deals.
+        </p>
+      </header>
 
       {/* Intent Tabs — Clean Horizontal */}
       <div className="mb-6">
@@ -594,14 +599,15 @@ export default function UnifiedMarketplacePage() {
             return (
               <button
                 key={intent}
+                aria-pressed={isActive}
                 onClick={() => handleIntentChange(intent)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-lg font-medium transition-all flex-1 text-sm justify-center ${
+                className={`flex min-w-0 items-center gap-1 px-1 sm:gap-2 sm:px-5 py-3 rounded-lg font-medium transition-all flex-1 text-sm justify-center ${
                   isActive
                     ? `bg-gradient-to-r ${cfg.gradient} text-white`
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
-                <IntentIcon className="w-4 h-4" />
+                <IntentIcon className="hidden sm:inline w-4 h-4" />
                 <span className="hidden sm:inline">{cfg.label}</span>
                 <span className="sm:hidden">{cfg.label.split(" ")[0]}</span>
                 {count > 0 && (
@@ -625,7 +631,7 @@ export default function UnifiedMarketplacePage() {
           </span>
           {config.description}
           <span className="ml-auto text-xs text-slate-500">
-            {intentCounts[activeIntent] || 0} available
+            {!loadFailed && !loading && `${intentCounts[activeIntent] || 0} available`}
           </span>
         </p>
       </div>
@@ -640,7 +646,6 @@ export default function UnifiedMarketplacePage() {
             <button
               onClick={() => {
                 setFilters((f) => ({ ...f, category: "", subcategory: "" }));
-                setPage(1);
               }}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
             >
@@ -661,7 +666,6 @@ export default function UnifiedMarketplacePage() {
                     category: isActive ? "" : cat.id,
                     subcategory: "",
                   }));
-                  setPage(1);
                 }}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive
@@ -934,6 +938,7 @@ export default function UnifiedMarketplacePage() {
               <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type="text"
+                aria-label="Search services"
                 value={filters.search}
                 onChange={(e) =>
                   setFilters((f) => ({ ...f, search: e.target.value }))
@@ -944,6 +949,7 @@ export default function UnifiedMarketplacePage() {
             </div>
 
             <select
+              aria-label="Sort services"
               value={filters.sort}
               onChange={(e) =>
                 setFilters((f) => ({ ...f, sort: e.target.value }))
@@ -1007,7 +1013,13 @@ export default function UnifiedMarketplacePage() {
           )}
 
           {/* Empty State - PATCH_54: Enhanced with intent-specific guidance */}
-          {!loading && displayServices.length === 0 && (
+          {loadFailed && (
+            <div role="alert" className="card p-6 text-center">
+              <h2 className="text-xl font-semibold">The catalog could not load</h2>
+              <button className="btn-secondary mt-4" onClick={loadMarketplace}>Try again</button>
+            </div>
+          )}
+          {!loading && !loadFailed && displayServices.length === 0 && (
             <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900/60 to-slate-950/60 backdrop-blur-sm p-12 text-center relative overflow-hidden">
               {/* Background Pattern */}
               <div className="absolute inset-0 opacity-5">
@@ -1239,6 +1251,7 @@ export default function UnifiedMarketplacePage() {
 
               {/* Close Button */}
               <button
+                aria-label="Close service preview"
                 onClick={() => setPreviewService(null)}
                 className="absolute top-4 right-4 p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 transition-colors"
               >
@@ -1406,12 +1419,7 @@ export default function UnifiedMarketplacePage() {
                       : "Total Price"}
                 </div>
                 <div className="text-white font-bold text-3xl">
-                  {activeIntent === "earn" && previewService.payRate
-                    ? `$${previewService.payRate}/hr`
-                    : activeIntent === "rent" &&
-                        previewService.rentalPlans?.length
-                      ? `$${previewService.rentalPlans[0].price}/${previewService.rentalPlans[0].unit}`
-                      : `$${previewService.price}`}
+                  {listingPrice(previewService, activeIntent)}
                 </div>
               </div>
               <div className="flex gap-3">
@@ -1488,21 +1496,6 @@ function ServiceCard({
     const canDoIntent = intent === "rent" && service.allowedActions?.rent;
     const intentSuffix = canDoIntent ? `?intent=${intent}` : "";
     return `/services/${service._id}${intentSuffix}`;
-  };
-
-  // PATCH_106: Strict per-intent price display, no cross-mode leakage
-  const getPriceDisplay = () => {
-    if (intent === "earn" && service.payRate) {
-      return `$${service.payRate}/hr`;
-    }
-    if (intent === "rent" && service.rentalPlans?.length) {
-      const cheapest = service.rentalPlans.reduce(
-        (min, p) => (p.price < min.price ? p : min),
-        service.rentalPlans[0],
-      );
-      return `$${cheapest.price}/${cheapest.unit === "days" ? `${cheapest.duration}d` : `${cheapest.duration}mo`}`;
-    }
-    return `$${service.price}`;
   };
 
   // CTA label
@@ -1637,7 +1630,7 @@ function ServiceCard({
                   : "Price"}
             </div>
             <span className="text-xl font-bold text-white">
-              {getPriceDisplay()}
+              {listingPrice(service, intent)}
             </span>
           </div>
           <Link

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
+import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
 
 // PATCH_54: Eye icons for password visibility
@@ -74,6 +75,7 @@ const PASSWORD_RULES = [
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const next = authReturnPath(searchParams.get("next"));
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -167,7 +169,7 @@ function SignupForm() {
         user: res.user || { role: "user", email },
       });
       toast("Account created successfully!", "success");
-      router.push("/dashboard");
+      router.replace(next || "/dashboard");
     } catch (err: any) {
       // PATCH_54: Better error handling
       const message = err.message || "Signup failed";
@@ -376,7 +378,7 @@ function SignupForm() {
 
       <p className="text-sm mt-3 text-slate-400">
         Already have an account?{" "}
-        <a href="/login" className="text-indigo-400 hover:underline">
+        <a href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-indigo-400 hover:underline">
           Login
         </a>
       </p>

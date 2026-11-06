@@ -20,6 +20,7 @@
  */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -281,12 +282,6 @@ const IconUsers = () => (
   </svg>
 );
 
-const IconStar = () => (
-  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-  </svg>
-);
-
 const IconLock = () => (
   <svg
     className="w-5 h-5"
@@ -324,58 +319,15 @@ interface Order {
 }
 
 interface PlatformStats {
-  activeUsers: number;
-  totalPaidOut: number;
-  avgRating: number;
-}
-
-// ==================== ANIMATED COUNTER ====================
-function AnimatedCounter({
-  value,
-  prefix = "",
-  suffix = "",
-  decimals = 0,
-}: {
-  value: number;
-  prefix?: string;
-  suffix?: string;
-  decimals?: number;
-}) {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const duration = 1500;
-    const steps = 60;
-    const stepDuration = duration / steps;
-    const increment = value / steps;
-    let current = 0;
-
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        setDisplayValue(value);
-        clearInterval(timer);
-      } else {
-        setDisplayValue(current);
-      }
-    }, stepDuration);
-
-    return () => clearInterval(timer);
-  }, [value]);
-
-  return (
-    <span>
-      {prefix}
-      {decimals > 0
-        ? displayValue.toFixed(decimals)
-        : Math.floor(displayValue).toLocaleString()}
-      {suffix}
-    </span>
-  );
+  activeServices: number;
+  activeJobRoles: number;
+  totalUsers: number;
+  completedOrders: number;
 }
 
 // ==================== MAIN COMPONENT ====================
 export default function Dashboard() {
+  const router = useRouter();
   const { user, isAdmin, isAuthenticated, ready } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     walletBalance: 0,
@@ -388,11 +340,7 @@ export default function Dashboard() {
     affiliateBalance: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [platformStats, setPlatformStats] = useState<PlatformStats>({
-    activeUsers: 18450,
-    totalPaidOut: 312000,
-    avgRating: 4.8,
-  });
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   // PATCH_57: Onboarding guidance state
@@ -474,9 +422,9 @@ export default function Dashboard() {
     if (ready && isAuthenticated) {
       fetchDashboardData();
     } else if (ready) {
-      setLoading(false);
+      router.replace("/login");
     }
-  }, [ready, isAuthenticated, fetchDashboardData]);
+  }, [ready, isAuthenticated, fetchDashboardData, router]);
 
   // Fetch platform stats
   useEffect(() => {
@@ -484,14 +432,10 @@ export default function Dashboard() {
       try {
         const res = await apiRequest("/api/public/stats", "GET");
         if (res?.ok && res?.stats) {
-          setPlatformStats({
-            activeUsers: res.stats.totalUsers || 18450,
-            totalPaidOut: 312000,
-            avgRating: 4.8,
-          });
+          setPlatformStats(res.stats);
         }
       } catch {
-        // Use default values
+        // Platform counts are optional when the API is unavailable.
       }
     };
     fetchPlatformStats();
@@ -588,7 +532,7 @@ export default function Dashboard() {
     },
   ];
 
-  if (!ready) {
+  if (!ready || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -817,69 +761,21 @@ export default function Dashboard() {
           </motion.section>
         )}
 
-        {/* ==================== B) TRUST & PROOF STRIP ==================== */}
-        <motion.section
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="mb-8"
-        >
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        {platformStats && (
+          <section aria-label="Platform activity" className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {[
-              {
-                icon: <IconUsers />,
-                value: platformStats.activeUsers,
-                label: "Active Users",
-                suffix: "+",
-                color: "text-blue-400",
-              },
-              {
-                icon: <IconWallet />,
-                value: platformStats.totalPaidOut,
-                label: "Paid Out",
-                prefix: "$",
-                suffix: "+",
-                color: "text-emerald-400",
-              },
-              {
-                icon: <IconStar />,
-                value: platformStats.avgRating,
-                label: "Avg Rating",
-                suffix: "★",
-                decimals: 1,
-                color: "text-amber-400",
-              },
-              {
-                icon: <IconLock />,
-                value: 100,
-                label: "Secure Payments",
-                suffix: "%",
-                color: "text-purple-400",
-              },
-            ].map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
-                className="p-4 rounded-xl bg-white/5 border border-white/10 text-center hover:bg-white/[0.07] transition-colors"
-              >
-                <div className={`flex justify-center mb-2 ${stat.color}`}>
-                  {stat.icon}
-                </div>
-                <div className={`text-lg sm:text-xl font-bold ${stat.color}`}>
-                  <AnimatedCounter
-                    value={stat.value}
-                    prefix={stat.prefix || ""}
-                    suffix={stat.suffix || ""}
-                    decimals={stat.decimals || 0}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 mt-1">{stat.label}</p>
-              </motion.div>
+              ["Active services", platformStats.activeServices],
+              ["Job roles", platformStats.activeJobRoles],
+              ["Registered users", platformStats.totalUsers],
+              ["Completed orders", platformStats.completedOrders],
+            ].map(([label, value]) => (
+              <div key={label} className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+                <p className="text-lg sm:text-xl font-bold text-white">{value.toLocaleString()}</p>
+                <p className="text-xs text-slate-400 mt-1">{label}</p>
+              </div>
             ))}
-          </div>
-        </motion.section>
+          </section>
+        )}
 
         {/* ==================== C) QUICK ACTIONS ==================== */}
         <motion.section

@@ -1,4 +1,5 @@
 import { MetadataRoute } from "next";
+import { siteOrigin } from "@/lib/siteOrigin";
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -7,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: "/",
       disallow: ["/admin", "/api"],
     },
-    sitemap: "https://uremo.online/sitemap.xml",
+    sitemap: `${siteOrigin}/sitemap.xml`,
   };
 }
