@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ApiError } from "@/lib/api";
 import { grantDate, type AccessGrant } from "@/lib/opportunities";
 import { formatPrice } from "@/lib/orderPrice";
-import { BackToMarket, LoadingState, MarketIcon, MarketPage, Notice } from "./MarketUI";
+import { LoadingState, MarketIcon, MarketPage, Notice } from "./MarketUI";
 import { useOpportunityData } from "./useOpportunityData";
 import styles from "./market.module.css";
 
@@ -24,16 +24,16 @@ function Delivery({ grant, token }: { grant: AccessGrant; token: string }) {
   return <div className={styles.delivery}><h3>Access details</h3><p className={styles.longText}>{state.data.deliverable || "Delivery instructions have not been provided."}</p></div>;
 }
 
-function GrantCard({ grant, token }: { grant: AccessGrant; token: string }) {
-  const [open, setOpen] = useState(false);
+function GrantCard({ grant, token, initialOpen }: { grant: AccessGrant; token: string; initialOpen: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
   const rented = grant.type === "rent";
   return <article className={styles.grant}>
     <div className={styles.cardMeta}>
-      <span className={styles.category}><MarketIcon name={grant.type} />{rented ? "Rental" : "Owned"}</span>
+      <span className={styles.category}><MarketIcon name={grant.type} />{rented ? "Rental" : "Full Access"}</span>
       <span className={grant.active ? styles.active : styles.status}>{grant.active ? "Active access" : "Ended"}</span>
     </div>
     <h2>{grant.title}</h2>
-    {!rented && <p>Exclusive project rights</p>}
+
     {grant.projectScope && <details><summary>Project scope at checkout</summary><p className={styles.longText}>{grant.projectScope}</p></details>}
     <dl className={styles.receipt}>
       <div><dt>Paid</dt><dd>{formatPrice(grant.amount, grant.currency)}</dd></div>
@@ -42,13 +42,13 @@ function GrantCard({ grant, token }: { grant: AccessGrant; token: string }) {
     </dl>
     <div className={styles.buttonRow}>
       {grant.active && <button type="button" className={styles.secondary} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? "Hide access details" : "Show access details"}</button>}
-      <Link className={styles.textLink} href={`/opportunities/${grant.opportunityId}`}>View opportunity <MarketIcon name="arrow" size={15} /></Link>
+      {grant.active && grant.projectId && <Link className={styles.textLink} href={`/workspace/project/${grant.projectId}`}>Open project <MarketIcon name="arrow" size={15} /></Link>}
     </div>
     {open && grant.active && <Delivery grant={grant} token={token} />}
   </article>;
 }
 
-function MyGrants({ token }: { token: string }) {
+export function ProjectAccessRecords({ token, selectedGrant }: { token: string; selectedGrant?: string }) {
   const { state, reload } = useOpportunityData<{ grants: AccessGrant[] }>("/api/opportunities/mine", token);
   const grants = state.phase === "loaded" && Array.isArray(state.data.grants) ? state.data.grants : null;
   useEffect(() => {
@@ -63,20 +63,20 @@ function MyGrants({ token }: { token: string }) {
 
   if (state.phase === "loading") return <LoadingState label="Loading your access…" />;
   if (!grants) return <Notice title="Your access could not be loaded" retry={reload}><p>Check your connection and try again.</p></Notice>;
-  if (!grants.length) return <Notice title="You have no rentals or purchases"><p>Your paid opportunities and their access details will appear here.</p><Link className={styles.primary} href="/explore-services">Explore opportunities <MarketIcon name="arrow" size={16} /></Link></Notice>;
+  if (!grants.length) return <Notice title="No project access yet"><p>Your rented and Full Access projects appear here after checkout.</p><div className={styles.buttonRow}><Link className={styles.secondary} href="/projects/rent">Rent projects</Link><Link className={styles.secondary} href="/projects/full-access">Full Access projects</Link></div></Notice>;
   return <>
     <div className={styles.libraryTools}><span>{grants.length} {grants.length === 1 ? "record" : "records"}</span><button className={styles.textLink} type="button" onClick={reload}>Refresh access</button></div>
-    <div className={styles.grid}>{grants.map(grant => <GrantCard key={grant._id} grant={grant} token={token} />)}</div>
+    <div className={styles.grid}>{grants.map(grant => <GrantCard key={grant._id} grant={grant} token={token} initialOpen={grant.active && grant._id === selectedGrant} />)}</div>
   </>;
 }
 
-export default function OpportunityAccess() {
+export default function OpportunityAccess({ selectedGrant }: { selectedGrant?: string }) {
   const { ready, token } = useAuth();
   return <MarketPage>
-    <BackToMarket />
-    <header className={styles.hero}><div><h1>My opportunity access</h1><p>Your rentals, purchases and delivery instructions.</p></div></header>
-    {!ready ? <LoadingState label="Checking your session…" /> : token ? <MyGrants key={token} token={token} /> :
-      <Notice title="Sign in to see your access"><p>Use the account that rented or purchased the opportunity.</p>
+    <Link href="/profile#project-access" className={styles.textLink}><MarketIcon name="back" /> Profile</Link>
+    <header className={styles.hero}><div><h1>My project access</h1><p>Your rental terms, Full Access purchases and handoff instructions.</p></div></header>
+    {!ready ? <LoadingState label="Checking your session…" /> : token ? <ProjectAccessRecords key={token} token={token} selectedGrant={selectedGrant} /> :
+      <Notice title="Sign in to see your access"><p>Use the account that rented or purchased the project.</p>
         <Link className={styles.primary} href="/login?next=%2Fopportunities%2Faccess">Sign in</Link></Notice>}
   </MarketPage>;
 }

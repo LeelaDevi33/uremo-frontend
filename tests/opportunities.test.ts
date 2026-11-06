@@ -1,52 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applicationPath, availableFor, chargeTerms, filteredOpportunities, readIntent, type Opportunity } from "../lib/opportunities";
+import { availableFor, chargeTerms, isProjectOffer, legacyCatalogPath, matchesCatalogSearch, roleApplicationPath, type Opportunity } from "../lib/opportunities";
 import { linkedApplicationPosition } from "../lib/applicationLink";
+import { authReturnPath } from "../lib/authReturnPath";
 
-const listing: Opportunity = {
-  _id: "a00000000000000000000001", title: "Design review", description: "Review an accessible interface.",
-  category: "design", status: "published", availability: "available", applyEnabled: true,
-  workPositionId: "b00000000000000000000001", rentEnabled: true, rentPrice: 14.25,
-  rentalDays: 7, buyEnabled: true, buyPrice: 85, currency: "USD",
+const role = { _id: "b00000000000000000000001", title: "Design", category: "design", active: true };
+const offer: Opportunity = {
+  _id: "a00000000000000000000001", projectId: "c00000000000000000000001", title: "Design review",
+  description: "Review an accessible interface.", category: "design", status: "published", availability: "available",
+  kind: "project", needsReview: false, applyEnabled: false, workPositionId: role._id, workPositionTitle: role.title,
+  rentEnabled: true, rentPrice: 14.25, rentalDays: 7, buyEnabled: true, buyPrice: 85, currency: "USD",
 };
-
-test("one available opportunity exposes independently configured actions and its exact application role", () => {
-  for (const intent of ["apply", "rent", "buy"] as const) assert.ok(availableFor(listing, intent));
-  const target = new URL(applicationPath(listing)!, "https://example.test");
-  assert.equal(target.pathname, "/apply-to-work");
-  const role = { _id: listing.workPositionId!, active: true };
+test("only an active specialization links to the free role application", () => {
+  const target = new URL(roleApplicationPath(role)!, "https://example.test");
   assert.equal(linkedApplicationPosition([role], target.searchParams), role);
-  assert.equal(applicationPath({ ...listing, workPositionId: null }), null);
-  assert.equal(applicationPath({ ...listing, applyEnabled: false }), null);
-  assert.equal(availableFor({ ...listing, rentEnabled: false }, "rent"), false);
-  assert.equal(availableFor({ ...listing, buyEnabled: false }, "buy"), false);
-});
-
-test("a rental locks both paid actions while applications remain available; sale closes all three", () => {
-  const rental: Opportunity = { ...listing, availability: "rented" };
-  assert.ok(availableFor(rental, "apply"));
-  assert.equal(availableFor(rental, "rent"), false);
-  assert.equal(availableFor(rental, "buy"), false);
-  for (const intent of ["apply", "rent", "buy"] as const) {
-    assert.equal(availableFor({ ...listing, availability: "sold" }, intent), false);
-    assert.equal(availableFor({ ...listing, status: "archived" }, intent), false);
+  assert.equal(roleApplicationPath({ ...role, active: false }), null);
+  for (const key of ["opportunityId", "projectId"]) {
+    target.searchParams.set(key, offer._id);
+    assert.equal(linkedApplicationPosition([role], target.searchParams), null);
+    target.searchParams.delete(key);
   }
 });
-
-test("catalog search combines category and intent and excludes archived, draft and sold listings", () => {
-  const rows: Opportunity[] = [listing, { ...listing, status: "draft" }, { ...listing, status: "archived" }, { ...listing, availability: "sold" }];
-  assert.deepEqual(filteredOpportunities(rows, "all", "", ""), [listing]);
-  assert.deepEqual(filteredOpportunities(rows, "rent", "design", "  ACCESSIBLE "), [listing]);
-  assert.deepEqual(filteredOpportunities(rows, "apply", "data", ""), []);
-  assert.deepEqual(filteredOpportunities(rows, "buy", "", "unknown"), []);
-  assert.equal(readIntent("earn"), "apply");
-  assert.equal(readIntent("deal"), "all");
+test("legacy or mixed listings cannot be discovered or checked out", () => {
+  for (const patch of [{ kind: undefined }, { kind: "legacy" as const }, { applyEnabled: true }, { needsReview: true }, { projectId: null }, { workPositionId: null }]) {
+    const old = { ...offer, ...patch };
+    assert.equal(isProjectOffer(old), false);
+    assert.equal(availableFor(old, "rent"), false);
+    assert.equal(availableFor(old, "buy"), false);
+  }
 });
-
-test("payment sends the exact displayed price and rental term, suppressing invalid quotes", () => {
-  assert.deepEqual(chargeTerms(listing, "rent"), { expectedAmount: 14.25, expectedRentalDays: 7 });
-  assert.deepEqual(chargeTerms(listing, "buy"), { expectedAmount: 85 });
-  assert.equal(availableFor({ ...listing, rentalDays: 0 }, "rent"), false);
-  assert.equal(availableFor({ ...listing, rentPrice: NaN }, "rent"), false);
-  assert.equal(availableFor({ ...listing, buyPrice: -10 }, "buy"), false);
+test("only offered paid modes with valid published terms and available inventory are actionable", () => {
+  assert(availableFor(offer, "rent")); assert(availableFor(offer, "buy"));
+  for (const availability of ["sold", "rented"] as const) {
+    assert(!availableFor({ ...offer, availability }, "buy")); assert(!availableFor({ ...offer, availability }, "rent"));
+  }
+  assert(!availableFor({ ...offer, rentEnabled: false }, "rent")); assert(!availableFor({ ...offer, buyEnabled: false }, "buy"));
+  assert(!availableFor({ ...offer, status: "draft" }, "buy")); assert(!availableFor({ ...offer, rentPrice: NaN }, "rent"));
+  assert.deepEqual(chargeTerms({ ...offer, revision: "r3" }, "rent"), { expectedAmount: 14.25, expectedRentalDays: 7, expectedRevision: "r3" });
+});
+test("legacy discovery links, search and signed-in returns resolve to the appropriate workflow", () => {
+  assert.equal(legacyCatalogPath("apply"), "/open-roles"); assert.equal(legacyCatalogPath("earn"), "/open-roles");
+  assert.equal(legacyCatalogPath("rent"), "/projects/rent"); assert.equal(legacyCatalogPath("buy"), "/projects/full-access");
+  assert(matchesCatalogSearch(["Project brief", "Design", "Accessibility"], "accessi DESIGN")); assert(!matchesCatalogSearch(["Design"], "Math"));
+  const path = "/opportunities/" + offer._id + "?mode=buy";
+  assert.equal(authReturnPath(path), path); assert.equal(authReturnPath("//outside.test"), null);
 });

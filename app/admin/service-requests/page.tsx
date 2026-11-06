@@ -430,7 +430,7 @@ export default function AdminServiceRequestsPage() {
                       className="btn-secondary"
                       href="/admin/opportunities"
                     >
-                      Manage opportunities
+                      Manage project offers
                     </a>
                   </div>
                 </Card>

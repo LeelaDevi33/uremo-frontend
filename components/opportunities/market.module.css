@@ -1,4 +1,4 @@
-.canvas {
+.canvas, .library {
   --ink: #f0f4f8;
   --muted: #a5b1c0;
   --line: #2c3743;
@@ -6,8 +6,9 @@
   --accent: #a6eddf;
   color: var(--ink);
   background: linear-gradient(125deg, #131f29 0, #0d141d 42%, #0c121a 100%);
-  min-height: calc(100svh - 3.5rem);
 }
+.canvas { min-height:calc(100svh - 3.5rem); }
+.library { border-radius:1rem; padding:clamp(1rem,3vw,1.5rem); }
 .container { width: min(100%, 73rem); margin: auto; padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 3rem) 7rem; }
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin: 0 0 clamp(1.75rem, 4vw, 3.25rem); }
 .textLink + .hero { margin-top: 2rem; }
@@ -108,3 +109,7 @@
   .container { padding-bottom: 7.5rem; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .card { transition: none; } }
+.tileTitle { font-size:clamp(1.35rem, 2.2vw, 1.65rem); font-weight:650; line-height:1.25; margin-top:1rem; overflow-wrap:anywhere; }
+.requirements { margin:0 0 1rem; color:var(--muted); font-size:.92rem; }
+.requirements summary { cursor:pointer; color:var(--ink); }
+.subtle { margin:.25rem 0; font-size:.82rem; color:var(--muted); }

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import OpportunityAccess from "@/components/opportunities/OpportunityAccess";
 
-export const metadata: Metadata = { title: "My opportunity access", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "My project access", robots: { index: false, follow: false } };
 
-export default function AccessPage() {
-  return <OpportunityAccess />;
+export default async function AccessPage({ searchParams }: { searchParams: Promise<{ grant?: string }> }) {
+  return <OpportunityAccess selectedGrant={(await searchParams).grant} />;
 }

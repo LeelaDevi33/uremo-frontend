@@ -95,13 +95,13 @@ function QuickActionsMenu() {
           href="/admin/opportunities"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Manage opportunities
+          Manage project offers
         </Link>
         <Link
           href="/admin/work-positions"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Manage job roles
+          Manage specializations
         </Link>
         <Link
           href="/admin/workspace/screenings"

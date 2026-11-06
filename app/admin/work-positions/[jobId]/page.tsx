@@ -20,6 +20,7 @@ type ScreeningOption = {
 };
 
 type Project = {
+  marketplaceReserved?: boolean;
   _id?: string;
   title: string;
   description?: string;
@@ -1628,7 +1629,8 @@ export default function AdminJobRolePage() {
                             >
                               ✏️ Edit
                             </button>
-                            {proj.status === "draft" && proj._id && (
+                            {proj.marketplaceReserved && <Link href="/admin/opportunities" className="text-sm text-cyan-300 underline">Reserved for a project offer</Link>}
+                            {!proj.marketplaceReserved && proj.status === "draft" && proj._id && (
                               <button
                                 onClick={() => activateProject(proj._id!)}
                                 disabled={saving}

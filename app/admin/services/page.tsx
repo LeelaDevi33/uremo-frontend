@@ -71,7 +71,7 @@ export default function LegacyServicesPage() {
           href="/admin/opportunities"
           className="rounded-lg bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950"
         >
-          Manage opportunities
+          Manage project offers
         </Link>
       </div>
       <label className="block text-sm">

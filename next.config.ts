@@ -3,7 +3,7 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   // Limit static generation workers on Windows development machines.
-  ...(process.platform === "win32" ? { experimental: { cpus: 2 } } : {}),
+  ...(process.platform === "win32" ? { experimental: { cpus: 1 } } : {}),
   async redirects() {
     return [
       { source: "/admin/jarvisx-write", destination: "/admin/opportunities", permanent: false },

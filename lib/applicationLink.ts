@@ -15,6 +15,7 @@ export function linkedApplicationPosition<T extends Position>(
   positions: T[],
   query: URLSearchParams,
 ): T | null | undefined {
+  if (query.has("projectId") || query.has("opportunityId")) return null;
   const serviceIds = query.getAll("serviceId").map(id => id.trim().toLowerCase());
   const roleIds = [...query.getAll("positionId"), ...query.getAll("jobId")]
     .map(id => id.trim().toLowerCase());

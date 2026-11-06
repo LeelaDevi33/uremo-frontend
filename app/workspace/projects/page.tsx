@@ -24,6 +24,7 @@ type Project = {
   earningsCredited?: number;
   projectType?: "standard" | "rlhf_dataset"; // PATCH_97
 };
+type AcquiredProject = { _id: string; title: string; accessType: "rent" | "buy"; endsAt?: string };
 
 const STATUS_CONFIG: Record<
   string,
@@ -54,10 +55,13 @@ const STATUS_CONFIG: Record<
 export default function WorkerProjectsPage() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [acquired, setAcquired] = useState<AcquiredProject[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadProjects = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiRequest(
         "/api/workspace/projects",
@@ -66,7 +70,9 @@ export default function WorkerProjectsPage() {
         true,
       );
       setProjects(res.projects || []);
+      setAcquired(res.acquiredProjects || []);
     } catch (e: any) {
+      setLoadError(true);
       toast(e?.message || "Failed to load projects", "error");
     } finally {
       setLoading(false);
@@ -120,12 +126,22 @@ export default function WorkerProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">My Projects</h1>
-          <p className="text-slate-400">View and manage your assigned work</p>
+          <p className="text-slate-400">Your project access and work assignments.</p>
         </div>
         <Link href="/workspace" className="btn-secondary">
           ← Back to Workspace
         </Link>
       </div>
+
+      {loadError ? <div className="card" role="alert">Projects could not be loaded. <button type="button" className="underline" onClick={loadProjects}>Retry</button></div> :
+      <section className="card space-y-3">
+        <h2 className="font-semibold">Projects in your profile</h2>
+        {acquired.map(p => <Link className="block rounded-xl border border-white/10 p-4" href={`/workspace/project/${p._id}`} key={p._id}>
+          <strong>{p.title}</strong><span className="block text-sm text-slate-400">{p.accessType === "buy" ? "Exclusive full access" : "Rental" + (p.endsAt ? " · Expires " + new Date(p.endsAt).toLocaleDateString() : "")}</span>
+        </Link>)}
+        {!acquired.length && <p className="text-slate-400">Projects you rent or buy appear here after checkout.</p>}
+        <div className="flex flex-wrap gap-4 text-sm underline"><Link href="/projects/rent">Browse rental projects</Link><Link href="/projects/full-access">Browse full access</Link><Link href="/opportunities/access">Access history</Link></div>
+      </section>}
 
       {/* Active Projects */}
       <div className="card">

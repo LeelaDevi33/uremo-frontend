@@ -152,18 +152,18 @@ export default function MyRentalsPage() {
         title="My Rentals"
         emoji={<EmojiRentals />}
         description="View your earlier service rentals and their access periods."
-        actionLabel="Explore opportunities"
-        actionHref="/explore-services"
+        actionLabel="Rent projects"
+        actionHref="/projects/rent"
       />
 
       {rentals.length === 0 ? (
         <div className="card">
           <EmptyState
             icon="Rent"
-            title="No active rentals"
-            description="Rent premium services on a subscription basis for ongoing access."
-            ctaText="Explore opportunities"
-            ctaHref="/explore-services"
+            title="No past service rentals"
+            description="Any earlier service rentals associated with your account appear here."
+            ctaText="Rent projects"
+            ctaHref="/projects/rent"
           />
         </div>
       ) : (

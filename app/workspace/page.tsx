@@ -365,7 +365,7 @@ function getStatusCTA(app: JobApplication): {
       return {
         text: "View Details",
         action: "details",
-        href: "/apply-to-work",
+        href: "/open-roles",
       };
   }
 }
@@ -834,7 +834,7 @@ function ApplicationsTab({
           title="You haven't applied to any work yet"
           description="Browse available work positions to find opportunities that match your skills. Start earning today!"
           ctaText="Apply to Work"
-          ctaHref="/apply-to-work"
+          ctaHref="/open-roles"
           secondaryCtaText="Learn More"
           secondaryCtaHref="/how-it-works"
         />
@@ -1062,7 +1062,7 @@ function ScreeningsTab({
           title="No Screenings Yet"
           description="Apply to positions to unlock screening tests. Pass the screening to become an approved worker!"
           ctaText="Apply to New Position"
-          ctaHref="/apply-to-work"
+          ctaHref="/open-roles"
           secondaryCtaText="View Applications"
           secondaryCtaHref="/workspace"
         />
@@ -1360,7 +1360,7 @@ export default function WorkspacePage() {
           title="No Workspace Profile"
           description="Apply to a work position to get started. Complete screenings, get assigned projects, and earn money."
           ctaText="Browse Work Positions"
-          ctaHref="/apply-to-work"
+          ctaHref="/open-roles"
         />
       </div>
     );
@@ -1414,7 +1414,7 @@ export default function WorkspacePage() {
 
       {/* Quick Actions */}
       <div className="mb-6 flex gap-3 flex-wrap">
-        <Link href="/apply-to-work" className="btn-primary">
+        <Link href="/open-roles" className="btn-primary">
           + Apply to New Position
         </Link>
         <Link href="/workspace/my-proofs" className="btn-secondary">

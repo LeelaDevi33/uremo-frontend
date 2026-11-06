@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import styles from "./market.module.css";
 
@@ -22,9 +21,6 @@ export function MarketPage({ children }: { children: ReactNode }) {
   return <div className={styles.canvas}><div className={styles.container}>{children}</div></div>;
 }
 
-export function BackToMarket() {
-  return <Link href="/explore-services" className={styles.textLink}><MarketIcon name="back" /> All opportunities</Link>;
-}
 
 export function LoadingState({ label }: { label: string }) {
   return <div className={styles.notice} role="status"><span className={styles.spinner} aria-hidden="true" />{label}</div>;

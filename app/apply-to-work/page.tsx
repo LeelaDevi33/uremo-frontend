@@ -11,6 +11,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 import { linkedApplicationPosition } from "@/lib/applicationLink";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
@@ -112,7 +113,16 @@ export default function ApplyToWorkPage() {
 
 function ApplicationEntry() {
   const query = useSearchParams().toString();
-  return <ApplicationForm key={query} query={query} />;
+  const { token, ready } = useAuth();
+  if (!ready) return <p className="p-6" role="status">Checking your session…</p>;
+  if (!token) {
+    const next = "/apply-to-work" + (query ? "?" + query : "");
+    return <div className="u-container max-w-xl py-12"><h1 className="text-3xl font-semibold">Free role applications</h1>
+      <p className="my-4 text-slate-300">Sign in to apply for a specialization or review your application.</p>
+      <div className="flex flex-wrap gap-3"><Link className="btn-primary" href={"/login?next=" + encodeURIComponent(next)}>Sign in</Link><Link className="btn-secondary" href="/open-roles">Browse open roles</Link></div>
+    </div>;
+  }
+  return <ApplicationForm key={query + token} query={query} />;
 }
 
 function ApplicationForm({ query }: { query: string }) {
@@ -277,11 +287,11 @@ function ApplicationForm({ query }: { query: string }) {
       <div className="u-container max-w-2xl py-12">
         <h1 className="text-2xl font-bold">{positionsFailed ? "Could not load the linked position" : "Linked position unavailable"}</h1>
         <p className="mt-3 text-slate-300">
-          {positionsFailed ? "Try loading the positions again." : "This opportunity link could not be matched to a single open position."}
+          {positionsFailed ? "Try loading the positions again." : "This link could not be matched to an open specialization."}
         </p>
         <div className="mt-6 flex gap-4">
           {positionsFailed && <button className="btn-primary" onClick={loadPositions}>Try again</button>}
-          <Link className="btn-secondary" href="/apply-to-work">Browse all positions</Link>
+          <Link className="btn-secondary" href="/open-roles">Browse open roles</Link>
         </div>
       </div>
     );
@@ -447,7 +457,7 @@ function ApplicationForm({ query }: { query: string }) {
 
       {linkedPosition && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <Link className="text-emerald-400 hover:underline" href="/apply-to-work">Browse all positions</Link>
+          <Link className="text-emerald-400 hover:underline" href="/open-roles">Browse open roles</Link>
         </div>
       )}
 
@@ -486,10 +496,10 @@ function ApplicationForm({ query }: { query: string }) {
               {ui.noPositionsFoundText}
             </p>
             <a
-              href="/explore-services"
+              href="/open-roles"
               className="inline-block mt-6 text-emerald-400 hover:text-emerald-300 font-medium transition"
             >
-              Explore opportunities →
+              Browse open roles →
             </a>
           </div>
         ) : (

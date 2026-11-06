@@ -187,7 +187,7 @@ export default function NotificationsPage() {
             title="No notifications yet"
             description="When you receive orders, wallet updates, or important alerts, they'll appear here. Start using UREMO to get your first notification!"
             ctaText="Explore Services"
-            ctaHref="/explore-services"
+            ctaHref="/open-roles"
             secondaryCtaText="Go to Dashboard"
             secondaryCtaHref="/dashboard"
           />

@@ -41,9 +41,11 @@ export default function Dashboard() {
   const metrics = [
     { label: "Wallet balance", value: summary?.wallet ? formatPrice(summary.wallet.balance, "USD") : undefined, href: "/wallet" },
     { label: "Active project rentals", value: summary?.grants?.filter(g => g.active && g.type === "rent").length, href: "/opportunities/access" },
-    { label: "Projects owned", value: summary?.grants?.filter(g => g.active && g.type === "buy").length, href: "/opportunities/access" },
+    { label: "Full Access projects", value: summary?.grants?.filter(g => g.active && g.type === "buy").length, href: "/opportunities/access" },
   ];
   const shortcuts = [
+    { title: "Rent projects", text: "Browse rental terms for projects in your specialization.", href: "/projects/rent" },
+    { title: "Full Access projects", text: "Buy permanent access to an individual project.", href: "/projects/full-access" },
     { title: "My project access", text: "Open handoffs, check rental expiry and review past access.", href: "/opportunities/access" },
     { title: "Work workspace", text: "Continue screenings and assigned work, or submit a project for review.", href: "/workspace" },
     { title: "My applications", text: "Review your role application and its status.", href: "/apply-to-work" },
@@ -55,7 +57,7 @@ export default function Dashboard() {
           <p className="mb-3 text-sm text-teal-300">Dashboard</p>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-6xl">{user?.name ? `Welcome back, ${user.name.split(" ")[0]}` : "Your dashboard"}</h1>
         </div>
-        <Link href="/explore-services" className="rounded-lg bg-teal-300 px-5 py-3 font-semibold text-slate-950 hover:bg-teal-200">Explore opportunities</Link>
+        <Link href="/open-roles" className="rounded-lg bg-teal-300 px-5 py-3 font-semibold text-slate-950 hover:bg-teal-200">Open roles</Link>
       </header>
 
       <dl className="grid gap-5 border-b border-white/15 py-8 sm:grid-cols-3">

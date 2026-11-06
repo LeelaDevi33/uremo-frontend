@@ -52,7 +52,7 @@ export default function Footer() {
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.servicesLinkText}
               </Link>
               <Link
-                href="/apply-to-work"
+                href="/open-roles"
                 className="hover:text-white transition"
               >
                 {footer.workLinkText ||

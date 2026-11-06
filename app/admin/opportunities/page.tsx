@@ -13,7 +13,9 @@ import {
   type ListingStatus,
   type Opportunity,
   type OpportunityDetail,
-  type WorkRole,
+  type ProjectChoice,
+  needsMapping,
+  selectableProject,
 } from "./editor";
 
 const endpoint = "/api/admin/opportunities";
@@ -72,7 +74,7 @@ function Mode({
   );
 }
 
-type Edit = { existing?: OpportunityDetail; draft: Draft };
+type Edit = { existing?: OpportunityDetail; draft: Draft; mapping?: boolean };
 type Revenue = {
   currency: "USD";
   rent: { count: number; total: number };
@@ -81,8 +83,8 @@ type Revenue = {
 
 export default function AdminOpportunitiesPage() {
   const [rows, setRows] = useState<Opportunity[]>([]);
-  const [roles, setRoles] = useState<WorkRole[]>([]);
-  const [roleError, setRoleError] = useState("");
+  const [projects, setProjects] = useState<ProjectChoice[]>([]);
+  const [projectError, setProjectError] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [reload, setReload] = useState(0);
@@ -113,17 +115,16 @@ export default function AdminOpportunitiesPage() {
       .finally(() => {
         if (current) setLoading(false);
       });
-    apiRequest<WorkRole[]>("/api/admin/work-positions", "GET", null, true)
+    apiRequest<{ projects: ProjectChoice[] }>("/api/admin/workspace/projects", "GET", null, true)
       .then((data) => {
-        if (!Array.isArray(data))
-          throw new Error("Could not read the work roles.");
+        if (!Array.isArray(data?.projects)) throw new Error("Could not read the projects.");
         if (current) {
-          setRoles(data);
-          setRoleError("");
+          setProjects(data.projects);
+          setProjectError("");
         }
       })
       .catch((err) => {
-        if (current) setRoleError(message(err));
+        if (current) { setProjects([]); setProjectError(message(err)); }
       });
     apiRequest<Revenue>("/api/admin/marketplace-revenue", "GET", null, true)
       .then((data) => {
@@ -193,14 +194,14 @@ export default function AdminOpportunitiesPage() {
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!edit || busy || writing.current || edit.existing?.availability === "sold") return;
+    if (!edit || busy || writing.current || edit.existing?.availability === "sold" || (edit.existing && needsMapping(edit.existing) && !edit.mapping)) return;
     const submitter = (event.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement | null;
     const status: ListingStatus =
-      submitter?.value === "publish"
+      edit.mapping ? "draft" : submitter?.value === "publish"
         ? "published"
         : (edit.existing?.status ?? "draft");
-    const validation = editorError(edit.draft, status, roles, edit.existing);
+    const validation = editorError(edit.draft, status, projects, edit.existing);
     if (validation) {
       setError(validation);
       return;
@@ -220,8 +221,8 @@ export default function AdminOpportunitiesPage() {
       );
       setNotice(
         status === "published"
-          ? "Published opportunity saved."
-          : "Opportunity saved.",
+          ? "Published project offer saved."
+          : edit.mapping ? "Mapped to the project as a draft. Review the terms before publishing." : "Project offer saved.",
       );
       setEdit(null);
       refresh();
@@ -266,12 +267,14 @@ export default function AdminOpportunitiesPage() {
   const existing = edit?.existing;
   const sold = existing?.availability === "sold";
   const draft = edit?.draft;
-  const activeRoles = roles.filter((role) => role.active !== false);
-  const selectedRole = roles.find((role) => role._id === draft?.workPositionId);
+  const legacy = !!existing && needsMapping(existing);
+  const reviewOnly = legacy && !edit?.mapping;
+  const selected = projects.find((project) => project._id === draft?.projectId);
+  const choices = projects.filter(selectableProject);
   const visibleRows = rows.filter(
     (row) =>
       filter === "all" ||
-      row.availability === filter || row.status === filter,
+      (filter === "review" && needsMapping(row)) || row.availability === filter || row.status === filter,
   );
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 text-slate-200 sm:px-6 lg:py-9">
@@ -284,17 +287,11 @@ export default function AdminOpportunitiesPage() {
               disabled={busy}
               className="mb-2 text-sm text-cyan-300 hover:underline"
             >
-              ← All opportunities
+              ← All project offers
             </button>
           )}
           <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            {edit
-              ? existing
-                ? sold
-                  ? "Sold opportunity"
-                  : "Edit opportunity"
-                : "New opportunity"
-              : "Opportunities"}
+            {!edit ? "Project offers" : reviewOnly ? "Review historical listing" : edit.mapping ? "Map listing to a project" : sold ? "Sold project offer" : existing ? "Edit project offer" : "New project offer"}
           </h1>
         </div>
         {!edit && (
@@ -309,7 +306,7 @@ export default function AdminOpportunitiesPage() {
               setEdit({ draft: toDraft() });
             }}
           >
-            New opportunity
+            New project offer
           </button>
         )}
       </header>
@@ -333,7 +330,7 @@ export default function AdminOpportunitiesPage() {
         <>
           {revenue && (
             <dl
-              aria-label="Settled opportunity payments"
+              aria-label="Settled project payments"
               className="mb-5 grid gap-3 sm:grid-cols-2"
             >
               {(["rent", "buy"] as const).map((kind) => (
@@ -371,12 +368,13 @@ export default function AdminOpportunitiesPage() {
             <label className="flex items-center gap-2 text-sm">
               Status{" "}
               <select
-                aria-label="Filter opportunities by status"
+                aria-label="Filter project offers"
                 className="rounded border border-slate-700 bg-slate-900 px-3 py-2"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               >
                 <option value="all">All listings</option>
+                <option value="review">Needs mapping review</option>
                 <option value="draft">Draft</option>
                 <option value="published">Published</option>
                 <option value="archived">Archived</option>
@@ -389,12 +387,12 @@ export default function AdminOpportunitiesPage() {
               href="/admin/work-positions"
               className="text-sm text-cyan-300 hover:underline"
             >
-              Manage work roles
+              Manage specialization applications
             </Link>
           </div>
           {loading ? (
             <p className={panel} role="status">
-              Loading opportunities…
+              Loading project offers…
             </p>
           ) : loadError ? (
             <div className={panel} role="alert">
@@ -406,8 +404,8 @@ export default function AdminOpportunitiesPage() {
           ) : !visibleRows.length ? (
             <p className={panel}>
               {filter === "all"
-                ? "No opportunities yet."
-                : "No opportunities with this status."}
+                ? "No project offers yet."
+                : "No project offers match this filter."}
             </p>
           ) : (
             <ul className="space-y-3">
@@ -427,15 +425,15 @@ export default function AdminOpportunitiesPage() {
                       </h2>
                       <p className="mt-1 text-sm text-slate-300">
                         {[
-                          row.applyEnabled && "Free application",
+                          needsMapping(row) && "Historical listing · needs review",
                           row.rentEnabled &&
                             (row.rentPrice && row.rentalDays
                               ? `Rent ${money.format(row.rentPrice)} / ${row.rentalDays} days`
                               : "Rental terms incomplete"),
                           row.buyEnabled &&
                             (row.buyPrice
-                              ? `Buy ${money.format(row.buyPrice)}`
-                              : "Buyout price incomplete"),
+                              ? `Full access ${money.format(row.buyPrice)}`
+                              : "Full-access price incomplete"),
                         ]
                           .filter(Boolean)
                           .join(" · ") || "No access options configured"}
@@ -446,9 +444,9 @@ export default function AdminOpportunitiesPage() {
                       className={secondary}
                       disabled={busy}
                       onClick={() => openListing(row._id)}
-                      aria-label={`${row.availability === "sold" ? "View" : "Edit"} ${row.title || "untitled draft"}`}
+                      aria-label={`${needsMapping(row) ? "Review" : row.availability === "sold" ? "View" : "Edit"} ${row.title || "untitled draft"}`}
                     >
-                      {row.availability === "sold" ? "View" : "Edit"}
+                      {needsMapping(row) ? "Review" : row.availability === "sold" ? "View" : "Edit"}
                     </button>
                   </div>
                 </li>
@@ -470,13 +468,43 @@ export default function AdminOpportunitiesPage() {
               offers.
             </p>
           )}
-          <fieldset disabled={sold || busy} className="min-w-0 space-y-4">
+          {legacy && <section className={panel + " mb-4 space-y-2"}>
+            <h2 className="text-lg font-semibold">Historical listing</h2>
+            <p>{existing?.canConvert ? "Choose a real project to create a draft from these terms. Publishing that draft is a separate step." : "Keep this listing for its history and existing access. You can archive it."}</p>
+            {existing?.workPositionId && <Link className="block text-cyan-300 underline" href={`/admin/work-positions/${encodeURIComponent(existing.workPositionId)}`}>Review linked specialization</Link>}
+            {reviewOnly && existing?.canConvert && !sold && <button className={secondary} type="button" disabled={busy} onClick={() => {
+              setEdit(current => current && ({ ...current, mapping: true, draft: { ...current.draft, projectId: "", rightsConfirmed: false } }));
+              setError("");
+            }}>Map to a project</button>}
+          </section>}
+          <fieldset disabled={sold || busy || reviewOnly} className="min-w-0 space-y-4">
+            {(!legacy || edit?.mapping) && <section className={panel}>
+              <h2 className="mb-3 text-lg font-semibold text-white">Project and specialization</h2>
+              <Field label="Linked project">
+                <select className={input} value={draft.projectId} onChange={(e) => change("projectId", e.target.value)}
+                  disabled={(!legacy && !!existing?.firstPublishedAt) || !!projectError}>
+                  <option value="">Choose an unassigned project</option>
+                  {draft.projectId && !choices.some(p => p._id === draft.projectId) && <option value={draft.projectId}>{selected?.title ?? "Previously linked project"} (unavailable)</option>}
+                  {choices.map(project => {
+                    const taken = rows.some(row => row._id !== existing?._id && row.projectId === project._id);
+                    return <option key={project._id} value={project._id} disabled={taken}>{project.title} — {project.workPositionId?.title}{taken ? " (offer already exists)" : ""}</option>;
+                  })}
+                </select>
+              </Field>
+              {!loading && !projectError && !choices.length && <p className="mt-2 text-sm">Create an unassigned draft or open project in a specialization to offer paid access.</p>}
+              {selected?.workPositionId && <p className="mt-2 text-sm text-slate-300">Specialization: {selected.workPositionId.title}</p>}
+              <div className="mt-3 flex flex-wrap gap-4 text-sm text-cyan-300">
+                <Link href="/admin/workspace/projects" target="_blank" rel="noopener noreferrer" className="underline">Manage projects</Link>
+                <button type="button" onClick={refresh} className="underline">Refresh project choices</button>
+              </div>
+              {projectError && <p role="alert" className="mt-2 text-sm text-amber-300">Project choices could not load. Refresh to try again.</p>}
+            </section>}
             <section className={panel}>
               <h2 className="mb-4 text-lg font-semibold text-white">
-                Public listing
+                Public project brief
               </h2>
               <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-                <Field label="Project title">
+                <Field label="Offer title">
                   <input
                     className={input}
                     maxLength={160}
@@ -513,81 +541,14 @@ export default function AdminOpportunitiesPage() {
             </section>
             <section className={panel}>
               <h2 className="mb-2 text-lg font-semibold text-white">
-                Access options
+                Paid access options
               </h2>
               <Mode
-                label="Apply for free"
-                checked={draft.applyEnabled}
-                onChange={(v) => change("applyEnabled", v)}
-              >
-                <Field label="Linked work role">
-                  <select
-                    className={input}
-                    value={draft.workPositionId}
-                    disabled={!!existing?.firstPublishedAt}
-                    onChange={(e) => change("workPositionId", e.target.value)}
-                  >
-                    <option value="">Choose an active role</option>
-                    {draft.workPositionId &&
-                      !activeRoles.some(
-                        (role) => role._id === draft.workPositionId,
-                      ) && (
-                        <option value={draft.workPositionId}>
-                          {selectedRole?.title ?? "Linked role"} (unavailable)
-                        </option>
-                      )}
-                    {activeRoles.map((role) => {
-                      const taken = rows.some(
-                        (listing) =>
-                          listing._id !== existing?._id &&
-                          listing.workPositionId === role._id,
-                      );
-                      return (
-                        <option
-                          key={role._id}
-                          value={role._id}
-                          disabled={taken}
-                        >
-                          {role.title}
-                          {taken ? " (already linked)" : ""}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </Field>
-                {existing?.firstPublishedAt && (
-                  <p className="mt-2 text-sm text-slate-400">
-                    The linked role is fixed after first publication.
-                  </p>
-                )}
-                <div className="mt-2 flex flex-wrap gap-4 text-sm text-cyan-300">
-                  <Link href="/admin/work-positions" target="_blank" rel="noopener noreferrer" className="underline">Manage job roles in a new tab</Link>
-                  <button type="button" onClick={refresh} className="underline">Refresh role choices</button>
-                </div>
-                {roleError && (
-                  <p className="mt-2 text-sm text-amber-200" role="alert">
-                    Work roles could not load.{" "}
-                    <button
-                      type="button"
-                      onClick={refresh}
-                      className="underline"
-                    >
-                      Retry
-                    </button>
-                  </p>
-                )}
-              </Mode>
-              {!draft.applyEnabled && draft.workPositionId && (
-                <div className="mb-3 text-sm text-slate-300">
-                  Linked role: {selectedRole?.title ?? "Previously linked role"}. Applications are closed.
-                  {!existing?.firstPublishedAt && <button type="button" onClick={() => change("workPositionId", "")} className="ml-2 text-cyan-300 underline">Unlink role</button>}
-                </div>
-              )}
-              <Mode
-                label="Rent project"
+                label="Rent"
                 checked={draft.rentEnabled}
                 onChange={(v) => change("rentEnabled", v)}
               >
+                <p className="mb-3 text-sm text-slate-300">Workers approved in this specialization can rent after passing its required screenings.</p>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Fixed rental price (USD)">
                     <input
@@ -608,11 +569,11 @@ export default function AdminOpportunitiesPage() {
                 </div>
               </Mode>
               <Mode
-                label="Buy outright"
+                label="Full access"
                 checked={draft.buyEnabled}
                 onChange={(v) => change("buyEnabled", v)}
               >
-                <Field label="Exclusive buyout price (USD)">
+                <Field label="Full-access price (USD)">
                   <input
                     className={input}
                     inputMode="decimal"
@@ -621,8 +582,7 @@ export default function AdminOpportunitiesPage() {
                   />
                 </Field>
                 <p className="mt-2 text-sm text-slate-400">
-                  A completed buyout transfers exclusive rights and closes the
-                  listing.
+                  Any signed-in buyer can purchase permanent, exclusive access while the project is available. A completed purchase closes the offer.
                 </p>
               </Mode>
             </section>
@@ -663,7 +623,7 @@ export default function AdminOpportunitiesPage() {
                 {error}
               </p>
             )}
-            {!sold && (
+            {!sold && !reviewOnly && (
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
@@ -674,22 +634,22 @@ export default function AdminOpportunitiesPage() {
                 >
                   {busy
                     ? "Saving…"
-                    : existing?.status === "published"
+                    : edit?.mapping ? "Save mapped draft" : existing?.status === "published"
                       ? "Save published changes"
                       : existing?.status === "archived"
                         ? "Save archived changes"
                         : "Save draft"}
                 </button>
-                {existing?.status !== "published" && (
+                {!edit?.mapping && existing?.status !== "published" && (
                   <button type="submit" value="publish" className={primary}>
-                    Publish opportunity
+                    Publish project offer
                   </button>
                 )}
               </div>
             )}
           </fieldset>
           {existing && <div className="mt-4 flex flex-wrap gap-3">
-            {!sold && existing.status !== "draft" && <button type="button" className={secondary} disabled={busy} onClick={() => changeVisibility("draft")}>Move to draft</button>}
+            {!sold && !legacy && existing.status !== "draft" && <button type="button" className={secondary} disabled={busy} onClick={() => changeVisibility("draft")}>Move to draft</button>}
             {existing.status !== "archived" && <button type="button" className={secondary} disabled={busy} onClick={() => changeVisibility("archived")}>Archive listing</button>}
             {conflict && <button type="button" className={secondary} disabled={busy} onClick={() => {
               if (window.confirm("Replace your unsaved edits with the latest saved listing?")) void openListing(existing._id);

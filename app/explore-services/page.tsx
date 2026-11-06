@@ -1,13 +1,10 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import OpportunityCatalog from "@/components/opportunities/OpportunityCatalog";
-import ExploreLoading from "./loading";
+import { redirect } from "next/navigation";
+import { legacyCatalogPath } from "@/lib/opportunities";
 
-export const metadata: Metadata = {
-  title: "Explore opportunities",
-  description: "Browse work opportunities, compare rental and buyout terms, and find open roles.",
-};
-
-export default function ExploreOpportunities() {
-  return <Suspense fallback={<ExploreLoading />}><OpportunityCatalog /></Suspense>;
+export default async function MarketplaceBookmark({ searchParams }: {
+  searchParams: Promise<{ intent?: string | string[]; category?: string | string[] }>;
+}) {
+  const { intent, category } = await searchParams;
+  const path = legacyCatalogPath(typeof intent === "string" ? intent : undefined);
+  redirect(path + (typeof category === "string" && category ? "?category=" + encodeURIComponent(category) : ""));
 }

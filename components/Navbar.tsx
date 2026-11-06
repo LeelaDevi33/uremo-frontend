@@ -61,21 +61,21 @@ export default function Navbar() {
   // PATCH_102: Enterprise user navigation — Marketplace, Work, Wallet, Orders, Account
   const userLinks = [
     {
-      href: "/explore-services",
-      label: "Marketplace",
+      href: "/open-roles",
+      label: "Open roles",
       emoji: <EmojiMarketplace />,
     },
-    { href: "/opportunities/access", label: "My access", emoji: <EmojiServices /> },
+    { href: "/projects/rent", label: "Rent projects", emoji: <EmojiServices /> },
+    { href: "/projects/full-access", label: "Full Access", emoji: <EmojiServices /> },
     { href: "/workspace", label: "Work", emoji: <EmojiWork /> },
     { href: "/wallet", label: "Wallet", emoji: <EmojiWallet /> },
-    { href: "/orders", label: "Orders", emoji: <EmojiOrders /> },
     { href: "/profile", label: "Account", emoji: <EmojiAccount /> },
   ];
 
   // PATCH_102: Simplified admin links for mobile drawer (full nav is in CommandRail)
   const adminLinks = [
     { href: "/admin", label: "Dashboard", emoji: <EmojiDashboard /> },
-    { href: "/admin/opportunities", label: "Opportunities", emoji: <EmojiServices /> },
+    { href: "/admin/opportunities", label: "Project offers", emoji: <EmojiServices /> },
     { href: "/admin/orders", label: "Orders", emoji: <EmojiOrders /> },
     {
       href: "/admin/workspace/master",
@@ -198,10 +198,10 @@ export default function Navbar() {
                     {nav.guestPrimaryCtaText}
                   </Link>
                   <Link
-                    href="/explore-services"
+                    href="/open-roles"
                     className="btn-secondary hidden sm:inline-flex"
                   >
-                    Explore opportunities
+                    Open roles
                   </Link>
                 </>
               )}

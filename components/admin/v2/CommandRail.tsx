@@ -78,7 +78,7 @@ export default function CommandRail({
       icon: <MarketplaceIcon />,
       badge: badges.pendingOrders,
       items: [
-        { label: "Opportunities", href: "/admin/opportunities" },
+        { label: "Project offers", href: "/admin/opportunities" },
         { label: "Service requests", href: "/admin/service-requests" },
         { label: "Archived orders", href: "/admin/cancelled-orders" },
         { label: "Legacy services", href: "/admin/services" },
@@ -105,7 +105,7 @@ export default function CommandRail({
         { label: "Worker directory", href: "/admin/workforce" },
         { label: "Workforce overview", href: "/admin/workspace" },
         { label: "Master workspace", href: "/admin/workspace/master" },
-        { label: "Job Roles", href: "/admin/work-positions" },
+        { label: "Specializations", href: "/admin/work-positions" },
         {
           label: "Screenings",
           href: "/admin/workspace/screenings",

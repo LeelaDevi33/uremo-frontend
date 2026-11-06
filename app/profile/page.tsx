@@ -6,6 +6,8 @@
  */
 
 import { motion } from "framer-motion";
+import { ProjectAccessRecords } from "@/components/opportunities/OpportunityAccess";
+import market from "@/components/opportunities/market.module.css";
 import { useAuth } from "@/hooks/useAuth";
 import { EmojiAccount } from "@/components/ui/Emoji";
 import { useToast } from "@/hooks/useToast";
@@ -180,7 +182,9 @@ const INTEREST_OPTIONS = [
 ];
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, ready } = useAuth();
+  const { user, token, isAuthenticated, ready } = useAuth();
+  const [selectedGrant, setSelectedGrant] = useState<string>();
+  useEffect(() => { setSelectedGrant(new URLSearchParams(window.location.search).get("grant") || undefined); }, []);
   const { toast } = useToast();
   const [emailPreferences, setEmailPreferences] = useState({
     productUpdates: true,
@@ -446,6 +450,13 @@ export default function ProfilePage() {
             </div>
           </div>
         </motion.div>
+
+        {token && <section id="project-access" aria-labelledby="profile-project-title" className={`${market.library} scroll-mt-24`}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 id="profile-project-title" className="text-2xl font-semibold">My project access</h2><Link href="/opportunities/access" className="text-teal-300 underline">Access history</Link>
+          </div>
+          <ProjectAccessRecords key={token + (selectedGrant || "")} token={token} selectedGrant={selectedGrant} />
+        </section>}
 
         {/* ===== ACCOUNT INFO ===== */}
         <motion.div

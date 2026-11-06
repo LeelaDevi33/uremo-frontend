@@ -473,7 +473,7 @@ export default function WalletPage() {
                 Add Balance
               </button>
               <Link
-                href="/explore-services"
+                href="/projects/full-access"
                 className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-all border border-white/20"
               >
                 Use Balance

@@ -115,7 +115,7 @@ export default function AdminDashboard() {
       <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Admin dashboard</h1>
         <div className="flex flex-wrap gap-4">
-          <Link className="text-emerald-300 underline" href="/admin/opportunities">Manage opportunities</Link>
+          <Link className="text-emerald-300 underline" href="/admin/opportunities">Manage project offers</Link>
           <Link className="text-emerald-300 underline" href="/admin/opportunities#receipt-heading">Access receipts</Link>
         </div>
       </header>

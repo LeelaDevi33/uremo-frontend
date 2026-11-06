@@ -63,7 +63,7 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
         forgetRequest();
         if (error.status === 409) {
           setStale(true);
-          setMessage("The terms or availability changed. Refresh this opportunity before continuing.");
+          setMessage("The terms or availability changed. Refresh the project before continuing.");
         } else if (error.status === 402) {
           setMessage("Your wallet has insufficient funds for this charge.");
           reload();
@@ -83,10 +83,10 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
 
   return (
     <section className={styles.confirm} aria-label="Wallet confirmation">
-      <h3 tabIndex={-1} ref={heading}>Review {type === "rent" ? "rental" : "buyout"}</h3>
+      <h3 tabIndex={-1} ref={heading}>Review {type === "rent" ? "rental" : "Full Access"}</h3>
       <p>{type === "rent"
         ? `Exclusive access starts when payment succeeds and expires after ${rentalTerm(item.rentalDays)}. You pay once.`
-        : "You receive the exclusive rights to this project and permanent access to its handoff. Confirming closes the listing to future applicants, renters and buyers."}</p>
+        : "You receive permanent, exclusive access to this project and its handoff. Confirming closes this offer."}</p>
       <dl className={styles.receipt}>
         <div><dt>Wallet charge</dt><dd>{formatPrice(expectedAmount, item.currency)} USD</dd></div>
         <div><dt>Available balance</dt><dd>{state.phase === "loading" ? "Checking…" : balance === null ? "Unavailable" : formatPrice(balance, item.currency)}</dd></div>
@@ -97,7 +97,7 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
       {message && <p role="alert" className={styles.alert}>{message}</p>}
       {uncertain && <Link href="/opportunities/access" className={styles.textLink}>Check My access</Link>}
       <div className={styles.buttonRow}>
-        {stale ? <button type="button" className={styles.primary} onClick={onRefresh}>Refresh opportunity</button> :
+        {stale ? <button type="button" className={styles.primary} onClick={onRefresh}>Refresh project</button> :
           <button className={styles.primary} type="button" disabled={busy || (!uncertain && (balance === null || balance < expectedAmount))} onClick={confirm}>
             {busy ? "Confirming…" : uncertain ? "Retry same payment" : `Confirm ${formatPrice(expectedAmount, item.currency)} payment`}
           </button>}

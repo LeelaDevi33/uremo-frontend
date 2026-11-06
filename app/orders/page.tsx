@@ -222,7 +222,7 @@ export default function OrdersPage() {
             </p>
           </div>
           <Link
-            href="/explore-services"
+            href="/projects/full-access"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-200 hover:bg-white/10 transition-all"
           >
             Browse Marketplace
@@ -264,7 +264,7 @@ export default function OrdersPage() {
           title="Your control center is empty"
           description="Explore our marketplace to find professional services for your needs, or apply to work and start earning."
           ctaText="Browse Marketplace"
-          ctaHref="/explore-services"
+          ctaHref="/projects/full-access"
           secondaryCtaText="Apply to Work"
           secondaryCtaHref="/apply-to-work"
         />

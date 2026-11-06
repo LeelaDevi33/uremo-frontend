@@ -97,10 +97,11 @@ export default function AdminWorkPositionsPage() {
   }
   function save(event: FormEvent) { event.preventDefault(); void mutate("save", editor?.role); }
   return <div className="mx-auto w-full max-w-6xl px-4 py-7 text-slate-200 sm:px-6">
-    {editor ? <button type="button" className="mb-3 text-sm text-cyan-300" disabled={busy} onClick={close}>← All job roles</button> :
-      <Link href="/admin/opportunities" className="text-sm text-cyan-300 hover:underline">Marketplace opportunities</Link>}
-    <header className="my-4 flex flex-wrap justify-between gap-3"><h1 className="text-3xl font-semibold">{editor ? editor.role ? "Edit job role" : "New job role" : "Job roles"}</h1>
-      {!editor && <button className="btn-primary" type="button" onClick={() => edit()} disabled={busy || loading}>New job role</button>}</header>
+    {editor ? <button type="button" className="mb-3 text-sm text-cyan-300" disabled={busy} onClick={close}>← All specializations</button> :
+      <Link href="/admin/opportunities" className="text-sm text-cyan-300 hover:underline">Manage paid project offers</Link>}
+    <header className="my-4 flex flex-wrap justify-between gap-3"><h1 className="text-3xl font-semibold">{editor ? editor.role ? "Edit specialization" : "New specialization" : "Specializations"}</h1>
+      {!editor && <button className="btn-primary" type="button" onClick={() => edit()} disabled={busy || loading}>New specialization</button>}</header>
+    {!editor && <p className="mb-4 text-sm text-slate-300">Workers apply to a specialization here. Set its requirements, then manage the applicants, screenings and projects for that role.</p>}
     {error && <p role="alert" className="mb-3 rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
     {notice && <p role="status" className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3">{notice}</p>}
     {draft && editor ? <form className={panel + " max-w-3xl"} onSubmit={save}>
@@ -112,7 +113,7 @@ export default function AdminWorkPositionsPage() {
         <label className="block">Applicant requirements<textarea aria-label="Applicant requirements" className={input} rows={3} maxLength={1600} value={draft.requirements} onChange={e => update("requirements", e.target.value)} /></label>
         <label className="block">Private admin notes<textarea aria-label="Private admin notes" className={input} rows={2} maxLength={4000} value={draft.adminNotes} onChange={e => update("adminNotes", e.target.value)} /></label>
         <label className="block max-w-xs">Display order<input className={input} type="number" step="1" required value={draft.sortOrder} onChange={e => update("sortOrder", e.target.value)} /></label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.active} onChange={e => update("active", e.target.checked)} /> Active for applications</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.active} onChange={e => update("active", e.target.checked)} /> Accept applications for this specialization</label>
         <div className="flex flex-wrap gap-3"><button className="btn-primary" type="submit">{busy ? "Saving…" : "Save role"}</button>
           <button className="btn-secondary" type="button" onClick={close}>Cancel</button>
           {editor.role && conflict && <button className="btn-secondary" type="button" disabled={loading} onClick={() => {
@@ -126,12 +127,12 @@ export default function AdminWorkPositionsPage() {
         <label>Filter by category<select className={input} value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option>{categories.map(v => <option key={v}>{v}</option>)}</select></label>
         <label>Filter by availability<select className={input} value={active} onChange={e => setActive(e.target.value)}><option value="all">All roles</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
       </div>
-      {loading ? <p role="status">Loading roles…</p> : !visible.length ? <div className={panel}><p>{error ? "Roles could not be displayed." : rows.length ? "No roles match these filters." : "No job roles have been created."}</p></div> :
+      {loading ? <p role="status">Loading roles…</p> : !visible.length ? <div className={panel}><p>{error ? "Roles could not be displayed." : rows.length ? "No roles match these filters." : "No specializations have been created."}</p></div> :
         <ul className="grid gap-3 md:grid-cols-2">{visible.map(role => <li className={panel + " min-w-0"} key={role._id}>
           <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : "Active"}</span></div>
           <p className="mt-1 text-sm text-slate-400">{role.category} · Display order {role.sortOrder ?? 0}</p>
           {role.description && <p className="mt-3 whitespace-pre-wrap break-words text-sm">{role.description}</p>}
-          <div className="mt-4 flex flex-wrap items-center gap-2"><Link className="btn-primary" href={`/admin/work-positions/${role._id}`}>Manage role</Link>
+          <div className="mt-4 flex flex-wrap items-center gap-2"><Link className="btn-primary" href={`/admin/work-positions/${role._id}`}>Manage specialization</Link>
             <button className="btn-secondary" type="button" disabled={busy} onClick={() => edit(role)}>Edit details</button>
             <button className="btn-secondary" type="button" disabled={busy} onClick={() => mutate("toggle", role)}>{role.active === false ? "Activate" : "Deactivate"}</button>
             <button className="text-sm text-rose-300" type="button" disabled={busy} onClick={() => mutate("delete", role)}>Delete role</button></div>

@@ -21,6 +21,7 @@ import {
 
 interface Project {
   _id: string;
+  marketplaceReserved?: boolean;
   title: string;
   description: string;
   category: string;
@@ -591,7 +592,7 @@ function ProjectsContent() {
             <div>
               <h1 className="text-2xl font-bold">Projects</h1>
               <p className="text-slate-400 text-sm">
-                Manage actual paid work assigned to workers
+                Create project briefs, set worker compensation and manage staff assignments.
                 {categoryParam && (
                   <span className="ml-2 text-purple-400">
                     (Category: {getJobRoleCategoryLabel(categoryParam)})
@@ -833,6 +834,7 @@ function ProjectsContent() {
                     <h3 className="font-semibold text-white">
                       {project.title}
                     </h3>
+                    {project.marketplaceReserved && <Link href="/admin/opportunities" className="text-sm text-cyan-300 underline">Reserved for a project offer</Link>}
                     <StatusTooltip status={project.status}>
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs ${getStatusBadge(
@@ -900,7 +902,7 @@ function ProjectsContent() {
                         ✏️ Edit
                       </button>
                     )}
-                    {["draft", "open", "pending"].includes(project.status) && (
+                    {!project.marketplaceReserved && ["draft", "open", "pending"].includes(project.status) && (
                       <button
                         onClick={() => handleDeleteProject(project)}
                         className="px-3 py-1.5 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition"
@@ -911,7 +913,7 @@ function ProjectsContent() {
                     )}
                   </div>
 
-                  {project.status === "open" && !project.assignedTo && (
+                  {project.status === "open" && !project.assignedTo && !project.marketplaceReserved && (
                     <button
                       onClick={() => setAssignModal(project)}
                       className="btn-secondary text-sm"
@@ -1490,7 +1492,7 @@ function ProjectsContent() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-700/50 rounded-lg">
-                    <p className="text-xs text-slate-400">Pay Rate</p>
+                    <p className="text-xs text-slate-400">Worker pay rate</p>
                     <p className="text-lg font-semibold text-emerald-400">
                       ${viewData.project?.payRate?.toFixed(2) || "0.00"}
                     </p>
@@ -1696,6 +1698,7 @@ function ProjectsContent() {
                   </label>
                   {/* PATCH_73: Removed 'completed' - completion must occur via proof approval */}
                   <select
+                    disabled={editModal.marketplaceReserved}
                     value={editForm.status}
                     onChange={(e) =>
                       setEditForm({ ...editForm, status: e.target.value })
@@ -1712,7 +1715,7 @@ function ProjectsContent() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1">
-                    Pay Rate ($)
+                    Worker pay rate (USD)
                   </label>
                   <input
                     type="number"

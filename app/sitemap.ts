@@ -10,13 +10,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1.0,
     },
     {
-      url: `${siteOrigin}/explore-services`,
+      url: `${siteOrigin}/open-roles`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
-      url: `${siteOrigin}/apply-to-work`,
+      url: `${siteOrigin}/projects/rent`,
+      changeFrequency: "weekly",
+    },
+    {
+      url: `${siteOrigin}/projects/full-access`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.7,
