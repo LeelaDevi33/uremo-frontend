@@ -29,6 +29,7 @@ interface Project {
   projectType?: string;
   datasetId?: string | { _id: string; name: string } | null;
   rewardPerTask?: number;
+  deliverables?: Deliverable[];
   estimatedTasks?: number;
   assignedTo?: {
     _id: string;
@@ -83,13 +84,26 @@ interface JobRole {
   active: boolean;
 }
 
-type DeliveryFields = { projectType: string; datasetId: string; rewardPerTask: number; estimatedTasks: number };
+type Deliverable = { title: string; description: string; required: boolean };
+type DeliveryFields = { projectType: string; datasetId: string; rewardPerTask: number; estimatedTasks: number; deliverables: Deliverable[] };
 
 function ProjectDeliveryFields({ fields, datasets, onChange }: {
   fields: DeliveryFields; datasets: { _id: string; name: string }[]; onChange: (change: Partial<DeliveryFields>) => void;
 }) {
   return <fieldset className="space-y-3">
     <legend className="font-medium">Work specification</legend>
+    <p className="text-sm text-slate-400">Deliverables the worker will see</p>
+    {fields.deliverables.map((item, i) => {
+      const changeItem = (patch: Partial<Deliverable>) => onChange({ deliverables: fields.deliverables.map((row, ix) => ix === i ? { ...row, ...patch } : row) });
+      return <fieldset key={i} className="border border-white/15 rounded p-3 space-y-2">
+        <legend>Deliverable {i + 1}</legend>
+        <label className="block">Title<input required className="input w-full" value={item.title} onChange={e => changeItem({ title: e.target.value })} /></label>
+        <label className="block">Description<textarea className="input w-full" value={item.description} onChange={e => changeItem({ description: e.target.value })} /></label>
+        <label className="block"><input type="checkbox" checked={item.required} onChange={e => changeItem({ required: e.target.checked })} /> Required</label>
+        <button type="button" className="btn-secondary" onClick={() => onChange({ deliverables: fields.deliverables.filter((_, ix) => ix !== i) })}>Remove deliverable {i + 1}</button>
+      </fieldset>;
+    })}
+    <button type="button" className="btn-secondary" onClick={() => onChange({ deliverables: [...fields.deliverables, { title: "", description: "", required: true }] })}>Add deliverable</button>
     <label className="block">Estimated tasks
       <input type="number" min="1" step="1" required className="input w-full" value={fields.estimatedTasks} onChange={e => onChange({ estimatedTasks: Number(e.target.value) })} />
     </label>
@@ -131,6 +145,7 @@ function ProjectsContent() {
 
   // Create form state - PATCH_86: Added workPositionId
   const [form, setForm] = useState({
+    payType: "per_task", deliverables: [] as Deliverable[], screeningIds: [] as string[], instructions: "",
     title: "",
     description: "",
     category: categoryParam || "microjobs",
@@ -168,6 +183,7 @@ function ProjectsContent() {
   const [viewModal, setViewModal] = useState<Project | null>(null);
   const [editModal, setEditModal] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({
+    deliverables: [] as Deliverable[],
     title: "",
     description: "",
     category: "microjobs",
@@ -268,7 +284,7 @@ function ProjectsContent() {
         : res.positions || res.data || [];
 
       if (normalized.length > 0) {
-        setJobRoles(normalized);
+        setJobRoles(normalized.filter((job: JobRole) => job.active !== false));
         return;
       }
 
@@ -371,6 +387,7 @@ function ProjectsContent() {
       setSuccess("Project created successfully!");
       setShowModal(false);
       setForm({
+        payType: "per_task", deliverables: [], screeningIds: [], instructions: "",
         title: "",
         description: "",
         category: "microjobs",
@@ -472,6 +489,7 @@ function ProjectsContent() {
   // PATCH_65.1: Open edit modal with project data
   const handleOpenEdit = (project: Project) => {
     setEditForm({
+      deliverables: (project.deliverables || []).map(d => ({ ...d, title: d.title || "", description: d.description || "", required: d.required !== false })),
       title: project.title || "",
       description: project.description || "",
       category: project.category || "microjobs",
@@ -1070,7 +1088,7 @@ function ProjectsContent() {
                       // Auto-set category from job role
                       category: selectedRole?.category || form.category,
                       // Auto-link screening if job role has one
-                      screeningId: selectedRole?.screeningId || "",
+                      screeningId: "", screeningIds: [],
                     });
                   }}
                   className="input w-full"
@@ -1109,24 +1127,11 @@ function ProjectsContent() {
                 <label className="block text-sm text-slate-400 mb-1">
                   Required Screening Test
                 </label>
-                <select
-                  value={(form as any).screeningId || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, screeningId: e.target.value } as any)
-                  }
-                  className="input w-full"
-                >
-                  <option value="">No screening required</option>
-                  {screenings
-                    .filter((s) => s.category === form.category || !s.category)
-                    .map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.title} ({s.category})
-                      </option>
-                    ))}
-                </select>
+                {screenings.filter(s => s.active !== false).map(s => <label className="block" key={s._id}>
+                  <input type="checkbox" checked={form.screeningIds.includes(s._id)} onChange={e => setForm({ ...form, screeningIds: e.target.checked ? [...form.screeningIds, s._id] : form.screeningIds.filter(id => id !== s._id) })} /> {s.title} ({s.category})
+                </label>)}
                 <p className="text-xs text-slate-500 mt-1">
-                  Only workers who passed this screening can be assigned
+                  Add project screenings here. The selected role’s requirements also apply.
                 </p>
               </div>
 
@@ -1135,9 +1140,9 @@ function ProjectsContent() {
                   Instructions
                 </label>
                 <textarea
-                  value={(form as any).instructions || ""}
+                  value={form.instructions}
                   onChange={(e) =>
-                    setForm({ ...form, instructions: e.target.value } as any)
+                    setForm({ ...form, instructions: e.target.value })
                   }
                   className="input w-full h-20 resize-none"
                   placeholder="Detailed instructions for the worker..."
@@ -1175,6 +1180,11 @@ function ProjectsContent() {
                 </div>
               </div>
 
+              <label className="block">Pay type
+                <select className="input w-full" value={form.payType} onChange={e => setForm({ ...form, payType: e.target.value })}>
+                  <option value="per_task">Per task</option><option value="hourly">Hourly</option><option value="fixed">Fixed</option>
+                </select>
+              </label>
               <ProjectDeliveryFields fields={form} datasets={datasetOptions} onChange={change => setForm({ ...form, ...change })} />
 
               <div className="flex gap-3 pt-4">
@@ -1566,9 +1576,9 @@ function ProjectsContent() {
                               {new Date(proof.createdAt).toLocaleDateString()}
                             </span>
                           </div>
-                          {proof.notes && (
+                          {proof.submissionText && (
                             <p className="text-xs text-slate-300 mt-1">
-                              {proof.notes}
+                              {proof.submissionText}
                             </p>
                           )}
                         </div>
@@ -1748,7 +1758,7 @@ function ProjectsContent() {
                   ) : (
                     screenings
                       .filter(
-                        (s) => s.category === editForm.category || !s.category,
+                        (s) => s.active !== false || editForm.screeningIds.includes(s._id),
                       )
                       .map((s) => (
                         <label
