@@ -86,7 +86,7 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
       <h3 tabIndex={-1} ref={heading}>Review {type === "rent" ? "rental" : "buyout"}</h3>
       <p>{type === "rent"
         ? `Exclusive access starts when payment succeeds and expires after ${rentalTerm(item.rentalDays)}. You pay once.`
-        : "You will receive permanent access. The buyout closes this listing to future applicants, renters and buyers."}</p>
+        : "You receive the exclusive rights to this project and permanent access to its handoff. Confirming closes the listing to future applicants, renters and buyers."}</p>
       <dl className={styles.receipt}>
         <div><dt>Wallet charge</dt><dd>{formatPrice(expectedAmount, item.currency)} USD</dd></div>
         <div><dt>Available balance</dt><dd>{state.phase === "loading" ? "Checking…" : balance === null ? "Unavailable" : formatPrice(balance, item.currency)}</dd></div>

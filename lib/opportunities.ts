@@ -2,6 +2,7 @@ export type Opportunity = {
   _id: string;
   title: string;
   description: string;
+  revision?: string;
   category: string;
   status: "draft" | "published" | "archived";
   availability: "available" | "rented" | "sold";
@@ -18,6 +19,7 @@ export type Opportunity = {
 export type AccessGrant = {
   _id: string;
   opportunityId: string;
+  projectScope?: string;
   title: string;
   type: "rent" | "buy";
   amount: number;
@@ -63,9 +65,10 @@ export function applicationPath(item: Opportunity): string | null {
 }
 
 export function chargeTerms(item: Opportunity, type: PaidIntent) {
-  return type === "rent"
+  const quote = type === "rent"
     ? { expectedAmount: item.rentPrice, expectedRentalDays: item.rentalDays }
     : { expectedAmount: item.buyPrice };
+  return item.revision ? { ...quote, expectedRevision: item.revision } : quote;
 }
 
 export function rentalTerm(days: number) {

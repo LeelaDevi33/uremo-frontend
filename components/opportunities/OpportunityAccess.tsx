@@ -33,6 +33,8 @@ function GrantCard({ grant, token }: { grant: AccessGrant; token: string }) {
       <span className={grant.active ? styles.active : styles.status}>{grant.active ? "Active access" : "Ended"}</span>
     </div>
     <h2>{grant.title}</h2>
+    {!rented && <p>Exclusive project rights</p>}
+    {grant.projectScope && <details><summary>Project scope at checkout</summary><p className={styles.longText}>{grant.projectScope}</p></details>}
     <dl className={styles.receipt}>
       <div><dt>Paid</dt><dd>{formatPrice(grant.amount, grant.currency)}</dd></div>
       <div><dt>{rented ? "Starts" : "Purchased"}</dt><dd>{grantDate(grant.startsAt)}</dd></div>

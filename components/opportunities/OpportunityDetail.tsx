@@ -30,7 +30,7 @@ function Options({ item, refresh, onSuccess }: { item: Opportunity; refresh: () 
           <section className={styles.option} key={type}>
             <div className={styles.optionName}><MarketIcon name={type} /><h3>{type === "rent" ? "Rent access" : "Buy outright"}</h3>
               <strong>{formatPrice(type === "rent" ? item.rentPrice : item.buyPrice, item.currency)}</strong></div>
-            <p>{type === "rent" ? `One wallet payment for ${rentalTerm(item.rentalDays)} of exclusive access.` : "One wallet payment for permanent, exclusive access. The listing closes after purchase."}</p>
+            <p>{type === "rent" ? `One wallet payment for ${rentalTerm(item.rentalDays)} of exclusive access.` : "Buy the exclusive rights to the project described here. This one-time payment closes the listing."}</p>
             {!selected && ready && (token ?
               <button type="button" className={styles.secondary} onClick={() => setSelected(type)}>Review {type === "rent" ? "rental" : "buyout"}<MarketIcon name="arrow" size={16} /></button> :
               <Link className={styles.secondary} href={next(`/opportunities/${item._id}`)}>Sign in to {type === "rent" ? "rent" : "buy"}<MarketIcon name="arrow" size={16} /></Link>)}
