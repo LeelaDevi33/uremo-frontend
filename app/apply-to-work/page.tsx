@@ -104,7 +104,7 @@ type WorkPosition = {
   requirements?: string;
   active?: boolean;
   serviceId?: string | { _id: string } | null;
-  screeningRequired?: boolean;
+  hasScreening?: boolean;
 };
 
 export default function ApplyToWorkPage() {
@@ -149,6 +149,7 @@ function ApplicationForm({ query }: { query: string }) {
   const [loading, setLoading] = useState(false);
   const [existing, setExisting] = useState<Application | null>(null);
   const [checking, setChecking] = useState(true);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
 
   const applyFaq =
     settings?.applyWork?.faq && settings.applyWork.faq.length
@@ -183,17 +184,17 @@ function ApplicationForm({ query }: { query: string }) {
   const hasPositions = positions.length > 0;
 
   const checkExisting = async () => {
+    setChecking(true);
+    setStatusUnavailable(false);
     try {
       const requested = params.get("positionId") || params.get("jobId");
       const path = requested && /^[a-f0-9]{24}$/i.test(requested)
         ? "/api/apply-work/me?positionId=" + encodeURIComponent(requested)
         : "/api/apply-work/me";
       const app = await apiRequest<Application | null>(path, "GET", null, true);
-      if (app) {
-        setExisting(app);
-      }
-    } catch (err) {
-      // No existing application
+      setExisting(app);
+    } catch {
+      setStatusUnavailable(true);
     } finally {
       setChecking(false);
     }
@@ -276,6 +277,13 @@ function ApplicationForm({ query }: { query: string }) {
 
   if (checking) {
     return <div className="p-6">{ui.loadingPositionsText}</div>;
+  }
+  if (statusUnavailable) {
+    return <div className="u-container max-w-2xl py-12" role="alert">
+      <h1 className="text-2xl font-bold">We couldn’t check your application</h1>
+      <p className="my-4">Try again to see whether you have already applied for this role.</p>
+      <button type="button" className="btn-primary" onClick={checkExisting}>Try again</button>
+    </div>;
   }
 
   if (linkedPosition !== undefined && positionsLoading) {
@@ -412,7 +420,7 @@ function ApplicationForm({ query }: { query: string }) {
   return (
     <div className="min-h-screen">
       {/* Hero Header */}
-      <div className="relative overflow-hidden border-b border-white/5">
+      {!linkedPosition && <div className="relative overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500/10 blur-[120px] rounded-full" />
 
@@ -453,16 +461,16 @@ function ApplicationForm({ query }: { query: string }) {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {linkedPosition && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <Link className="text-emerald-400 hover:underline" href="/open-roles">Browse open roles</Link>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <Link className="text-emerald-400 hover:underline" href={"/open-roles?role=" + encodeURIComponent(linkedPosition._id)}>← Back to role details</Link>
         </div>
       )}
 
       {/* Main Content - Two Column Layout */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`${linkedPosition ? "max-w-3xl" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 py-8`}>
         {positionsLoading ? (
           /* Skeleton Loading State */
           <div className="grid lg:grid-cols-5 gap-6">
@@ -504,9 +512,8 @@ function ApplicationForm({ query }: { query: string }) {
           </div>
         ) : (
           /* Two Column Layout */
-          <div className="grid lg:grid-cols-5 gap-6">
-            {/* Left Column - Position List */}
-            <div className="lg:col-span-2 space-y-3">
+          <div className={linkedPosition ? "" : "grid lg:grid-cols-5 gap-6"}>
+            {!linkedPosition && <div className="lg:col-span-2 space-y-3">
               <p className="text-sm text-slate-500 mb-2 px-1">
                 {filteredPositions.length} position
                 {filteredPositions.length !== 1 ? "s" : ""} available
@@ -539,7 +546,7 @@ function ApplicationForm({ query }: { query: string }) {
                             <p className="font-semibold text-white truncate">
                               {p.title}
                             </p>
-                            {p.screeningRequired && (
+                            {p.hasScreening && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                 Screening Required
                               </span>
@@ -582,7 +589,7 @@ function ApplicationForm({ query }: { query: string }) {
                   );
                 })
               )}
-            </div>
+            </div>}
 
             {/* Right Column - Position Details & Application Form */}
             <div className="lg:col-span-3">
@@ -608,18 +615,17 @@ function ApplicationForm({ query }: { query: string }) {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          {selectedPosition.screeningRequired && (
+                          {selectedPosition.hasScreening && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
                               Screening Required
                             </span>
                           )}
                           <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            Open Position
+                            Free role application
                           </span>
                         </div>
-                        <h2 className="text-2xl font-bold text-white">
-                          {selectedPosition.title}
-                        </h2>
+                        {linkedPosition ? <h1 className="text-2xl font-bold text-white">{selectedPosition.title}</h1> :
+                          <h2 className="text-2xl font-bold text-white">{selectedPosition.title}</h2>}
                         <p className="text-slate-400 mt-1">
                           {selectedPosition.category}
                         </p>
@@ -666,7 +672,7 @@ function ApplicationForm({ query }: { query: string }) {
                     )}
 
                     {/* Application Form */}
-                    {!showForm ? (
+                    {!showForm && !linkedPosition ? (
                       <button
                         type="button"
                         onClick={() => setShowForm(true)}
@@ -675,17 +681,18 @@ function ApplicationForm({ query }: { query: string }) {
                         Apply for this Position
                       </button>
                     ) : (
-                      <div className="space-y-4 pt-4 border-t border-white/10">
+                      <form className="space-y-4 pt-4 border-t border-white/10" onSubmit={event => { event.preventDefault(); if (!loading) void submit(); }}>
                         <h3 className="text-lg font-semibold text-white">
                           Submit Your Application
                         </h3>
 
                         {/* Message */}
                         <div>
-                          <label className="text-sm text-slate-400 block mb-2">
+                          <label htmlFor="role-application-message" className="text-sm text-slate-400 block mb-2">
                             {ui.messageLabel}
                           </label>
                           <textarea
+                            id="role-application-message"
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 transition resize-none"
                             rows={4}
                             placeholder={ui.messagePlaceholder}
@@ -696,10 +703,10 @@ function ApplicationForm({ query }: { query: string }) {
 
                         {/* Resume Upload */}
                         <div>
-                          <label className="text-sm text-slate-400 block mb-2">
+                          <span id="role-resume-method" className="text-sm text-slate-400 block mb-2">
                             {ui.resumeLabel}
-                          </label>
-                          <div className="mb-3 flex gap-3">
+                          </span>
+                          <div role="group" aria-labelledby="role-resume-method" className="mb-3 flex gap-3">
                             <button type="button" aria-pressed={resumeMode === "file"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("file")}>Upload a file</button>
                             <button type="button" aria-pressed={resumeMode === "link"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("link")}>Use a resume link</button>
                           </div>
@@ -729,7 +736,7 @@ function ApplicationForm({ query }: { query: string }) {
 
                         {/* Submit Button */}
                         <button
-                          onClick={submit}
+                          type="submit"
                           disabled={loading}
                           className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:from-emerald-400 hover:to-teal-400 transition-all duration-200 shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -760,7 +767,7 @@ function ApplicationForm({ query }: { query: string }) {
                             ui.submitText
                           )}
                         </button>
-                      </div>
+                      </form>
                     )}
                   </div>
                 </div>

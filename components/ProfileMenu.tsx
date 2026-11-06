@@ -127,6 +127,10 @@ export default function ProfileMenu() {
                   <span className="text-base">Admin</span>
                   Admin Panel
                 </Link>
+                <Link role="menuitem" href="/admin/work-positions" onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-amber-300 hover:bg-amber-500/10">
+                  Manage roles
+                </Link>
               </>
             )}
 

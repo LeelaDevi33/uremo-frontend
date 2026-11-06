@@ -9,7 +9,7 @@ import Navbar from "@/components/Navbar";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
-const FAVICON_PATH = "/brand/favicon.png?v=2";
+const FAVICON_PATH = "/brand/icon.png";
 
 export const metadata: Metadata = {
   title: {

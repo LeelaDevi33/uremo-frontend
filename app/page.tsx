@@ -1,7 +1,3 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-
-export default async function HomePage() {
-  const role = (await cookies()).get("role")?.value;
-  redirect(role === "user" || role === "admin" ? "/dashboard" : "/open-roles");
-}
+// Visitors and returning members start from the same live role directory.
+// Workspaces and the admin panel retain their own routes and access checks.
+export { default, metadata } from "./open-roles/page";
