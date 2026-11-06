@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
+import { workerIdentity } from "./workerIdentity";
 import {
   ConfirmActionModal,
   ActionType,
@@ -314,12 +315,7 @@ export default function Worker360Page() {
       // Normalize the worker data
       const normalizedWorker: WorkerDetail = {
         _id: workerData._id,
-        user: workerData.user || {
-          _id: "",
-          firstName: "",
-          lastName: "",
-          email: "",
-        },
+        user: workerIdentity(workerData.user, workerData.userId),
         position: workerData.position,
         positionTitle:
           workerData.positionTitle ||
