@@ -101,26 +101,26 @@ function QuickActionsMenu() {
           href="/admin/work-positions"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Add Job Role
+          Manage job roles
         </Link>
         <Link
           href="/admin/workspace/screenings"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Add Screening
+          Manage screenings
         </Link>
         <Link
           href="/admin/blogs"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Add Blog Post
+          Manage blog posts
         </Link>
         <div className="border-t border-white/5 my-1" />
         <Link
           href="/admin/tickets"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          View Open Tickets
+          View tickets
         </Link>
       </div>
     </div>

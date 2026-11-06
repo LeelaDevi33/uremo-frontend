@@ -523,7 +523,7 @@ export default function AdminWalletPage() {
         )}
 
         {/* PATCH_115: Withdrawal Requests Section */}
-        <div className="bg-slate-900 rounded-xl border border-slate-800 mb-8">
+        <div id="withdrawal-requests" className="bg-slate-900 rounded-xl border border-slate-800 mb-8">
           <div className="p-4 border-b border-slate-800 bg-slate-850 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-blue-400 text-xl">💸</span>

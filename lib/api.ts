@@ -1,3 +1,4 @@
+export const ADMIN_DATA_CHANGED_EVENT = "admin-data-changed";
 export const AUTH_CHANGED_EVENT = "auth-changed";
 
 export class ApiError extends Error {
@@ -51,7 +52,7 @@ export async function apiRequest<T = any>(
 
   const headers: Record<string, string> = {};
 
-  const isBodyAllowed = method !== "GET" && method !== "DELETE";
+  const isBodyAllowed = method !== "GET" && (method !== "DELETE" || body != null);
 
   if (!isFormData && isBodyAllowed) {
     headers["Content-Type"] = "application/json";
@@ -90,7 +91,6 @@ export async function apiRequest<T = any>(
       credentials: "include",
     };
 
-    // ✅ Only attach body for POST/PUT (never for GET/DELETE)
     if (isBodyAllowed && body !== null && body !== undefined) {
       requestInit.body = isFormData ? (body as BodyInit) : JSON.stringify(body);
     }
@@ -134,6 +134,9 @@ export async function apiRequest<T = any>(
     throw new ApiError(message, res.status, payload);
   }
 
+  if (method !== "GET" && typeof window !== "undefined" && endpoint.split("/").includes("admin")) {
+    window.dispatchEvent(new Event(ADMIN_DATA_CHANGED_EVENT));
+  }
   return payload as T;
 }
 

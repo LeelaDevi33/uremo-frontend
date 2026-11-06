@@ -110,7 +110,7 @@ export default function AdminAnalyticsPage() {
           <PageHeader
             title="Analytics Dashboard"
             emoji={<EmojiAnalytics />}
-            description="Real-time platform metrics and health"
+            description="Historical orders, account activity and service health"
           />
           <button
             onClick={loadData}
@@ -190,14 +190,14 @@ export default function AdminAnalyticsPage() {
               color="blue"
             />
             <StatCard
-              title="Total Orders"
+              title="Historical orders"
               value={stats.totalOrders}
               subtitle={`+${stats.ordersToday} today`}
               icon="📦"
               color="purple"
             />
             <StatCard
-              title="Revenue"
+              title="Legacy order revenue"
               value={formatCurrency(stats.totalRevenue)}
               subtitle={`${stats.completedOrders} completed`}
               icon="💰"
@@ -271,7 +271,7 @@ export default function AdminAnalyticsPage() {
                 color="#8B5CF6"
               />
               <ChartCard
-                title="Revenue"
+                title="Legacy order revenue"
                 data={charts.revenuePerDay}
                 dataKey="total"
                 color="#10B981"

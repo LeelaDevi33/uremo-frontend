@@ -10,8 +10,6 @@ import {
   ActionBar,
   AuditTrail,
   StatusTooltip,
-  UndoToast,
-  useUndoToast,
 } from "@/components/admin/v2";
 
 /**
@@ -27,13 +25,18 @@ interface Project {
   description: string;
   category: string;
   status: string;
-  priority: string;
+  priority?: string;
+  projectType?: string;
+  datasetId?: string | { _id: string; name: string } | null;
+  rewardPerTask?: number;
+  estimatedTasks?: number;
   assignedTo?: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
   };
-  earnings: number;
+  payRate: number;
   earningsCredited?: number; // PATCH_48: Track if earnings were credited
   completionNotes?: string; // PATCH_48: Worker's completion notes
   proofApproved?: boolean; // PATCH_73: Track if proof was approved
@@ -51,8 +54,9 @@ interface Worker {
   _id: string;
   userId: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
     email: string;
   };
   jobId: {
@@ -79,24 +83,49 @@ interface JobRole {
   active: boolean;
 }
 
+type DeliveryFields = { projectType: string; datasetId: string; rewardPerTask: number; estimatedTasks: number };
+
+function ProjectDeliveryFields({ fields, datasets, onChange }: {
+  fields: DeliveryFields; datasets: { _id: string; name: string }[]; onChange: (change: Partial<DeliveryFields>) => void;
+}) {
+  return <fieldset className="space-y-3">
+    <legend className="font-medium">Work specification</legend>
+    <label className="block">Estimated tasks
+      <input type="number" min="1" step="1" required className="input w-full" value={fields.estimatedTasks} onChange={e => onChange({ estimatedTasks: Number(e.target.value) })} />
+    </label>
+    <label className="block">Project type
+      <select className="input w-full" value={fields.projectType} onChange={e => onChange({ projectType: e.target.value, datasetId: "", rewardPerTask: 0 })}>
+        <option value="standard">Standard project</option><option value="rlhf_dataset">Dataset annotation</option>
+      </select>
+    </label>
+    {fields.projectType === "rlhf_dataset" && <>
+      <label className="block">Dataset
+        <select required className="input w-full" value={fields.datasetId} onChange={e => onChange({ datasetId: e.target.value })}>
+          <option value="">Choose a dataset</option>
+          {fields.datasetId && !datasets.some(row => row._id === fields.datasetId) && <option value={fields.datasetId}>Previously linked dataset</option>}
+          {datasets.map(row => <option key={row._id} value={row._id}>{row.name}</option>)}
+        </select>
+      </label>
+      <label className="block">Reward per task (USD)
+        <input type="number" min="0" step="0.01" required className="input w-full" value={fields.rewardPerTask} onChange={e => onChange({rewardPerTask: Number(e.target.value)})} />
+      </label>
+    </>}
+  </fieldset>;
+}
+
 function ProjectsContent() {
   const searchParams = useSearchParams();
   const showCreate = searchParams.get("action") === "create";
+  const linkedProject = searchParams.get("action") === "view" ? searchParams.get("id") : null;
   const categoryParam = searchParams.get("category");
-  const undoToast = useUndoToast();
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
   const [screenings, setScreenings] = useState<Screening[]>([]); // PATCH_64: For linkage
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]); // PATCH_86: Job roles
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(showCreate);
-  const [lastAssignedData, setLastAssignedData] = useState<{
-    projectId: string;
-    previousAssignee: string | null;
-  } | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [showLinkedScreenings, setShowLinkedScreenings] = useState(false); // PATCH_64
 
@@ -106,7 +135,8 @@ function ProjectsContent() {
     description: "",
     category: categoryParam || "microjobs",
     priority: "medium",
-    earnings: 0,
+    estimatedTasks: 1,
+    payRate: 0,
     deadline: "",
     screeningId: "", // PATCH_65.1: Link to screening test
     workPositionId: "", // PATCH_86: Job Role ID
@@ -141,6 +171,7 @@ function ProjectsContent() {
     title: "",
     description: "",
     category: "microjobs",
+    priority: "medium", projectType: "standard", datasetId: "", rewardPerTask: 0, estimatedTasks: 1,
     instructions: "",
     payRate: 0,
     payType: "per_task",
@@ -154,8 +185,24 @@ function ProjectsContent() {
   const [viewData, setViewData] = useState<any>(null);
 
   useEffect(() => {
+    if (!linkedProject) return;
+    if (!/^[a-f\d]{24}$/i.test(linkedProject)) {
+      setError("This project link contains an invalid ID.");
+      return;
+    }
+    let current = true;
+    apiRequest<{ project: Project }>(`/api/admin/workspace/project/${linkedProject}`, "GET", null, true)
+      .then((result) => {
+        if (!current) return;
+        setViewData(result);
+        setViewModal(result.project);
+      })
+      .catch((err) => { if (current) setError(err.message || "This project could not be opened."); });
+    return () => { current = false; };
+  }, [linkedProject]);
+
+  useEffect(() => {
     loadProjects();
-    loadWorkers();
     loadScreenings(); // PATCH_64
     loadJobRoles(); // PATCH_86
     loadDatasets(); // PATCH_95
@@ -174,27 +221,6 @@ function ProjectsContent() {
       setError(e.message || "Failed to load projects");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadWorkers = async () => {
-    try {
-      // PATCH_57: Load workers who are ready to work (ready_to_work or assigned status)
-      const res = await apiRequest<any>(
-        "/api/admin/workspace/workers?limit=200",
-        "GET",
-        null,
-        true,
-      );
-      // Filter to only workers who can receive tasks
-      const allWorkers = res.workers || [];
-      const readyWorkers = allWorkers.filter(
-        (w: any) =>
-          w.workerStatus === "ready_to_work" || w.workerStatus === "assigned",
-      );
-      setWorkers(readyWorkers);
-    } catch (e) {
-      console.error("Failed to load workers:", e);
     }
   };
 
@@ -312,65 +338,28 @@ function ProjectsContent() {
     requiresScreening: boolean;
   } | null>(null);
 
+  const [eligibilityError, setEligibilityError] = useState(false);
+  const [eligibilityVersion, setEligibilityVersion] = useState(0);
   useEffect(() => {
-    if (assignModal) {
-      // PATCH_86: Use backend endpoint to get eligible workers
-      const loadEligibleWorkers = async () => {
-        setLoadingEligible(true);
-        try {
-          const res = await apiRequest<any>(
-            `/api/admin/workspace/project/${assignModal._id}/eligible-workers`,
-            "GET",
-            null,
-            true,
-          );
-          if (res?.workers) {
-            // Transform to match Worker interface
-            // PATCH_92: Preserve both 'user' and 'userId' for dropdown display compatibility
-            const eligible = res.workers.map((w: any) => ({
-              _id: w._id,
-              user: w.userId,
-              userId: w.userId,
-              jobId: w.position,
-              category: w.position?.category || w.position?.title,
-              status: w.workerStatus,
-            }));
-            setAssignableWorkers(eligible);
-            setEligibilityInfo(res.eligibilityInfo || null);
-          } else {
-            // Fallback to category-based filtering
-            const projectCategory = assignModal.category
-              ?.toLowerCase()
-              .replace(/[_-]/g, " ");
-            const filtered = workers.filter((w: any) => {
-              const workerCategory = (w.category || w.jobId?.category || "")
-                .toLowerCase()
-                .replace(/[_-]/g, " ");
-              return (
-                workerCategory.includes(projectCategory) ||
-                projectCategory.includes(workerCategory) ||
-                projectCategory === "microjobs" ||
-                projectCategory === "other"
-              );
-            });
-            setAssignableWorkers(filtered.length > 0 ? filtered : workers);
-            setEligibilityInfo(null);
-          }
-        } catch (e) {
-          console.error("Failed to load eligible workers:", e);
-          // Fallback to all ready workers
-          setAssignableWorkers(workers);
-          setEligibilityInfo(null);
-        } finally {
-          setLoadingEligible(false);
-        }
-      };
-      loadEligibleWorkers();
-    } else {
-      setAssignableWorkers([]);
-      setEligibilityInfo(null);
-    }
-  }, [assignModal, workers]);
+    let current = true;
+    setSelectedWorker("");
+    setAssignableWorkers([]);
+    setEligibilityInfo(null);
+    setEligibilityError(false);
+    if (!assignModal) return;
+    setLoadingEligible(true);
+    apiRequest<{ workers: Worker[]; eligibilityInfo: typeof eligibilityInfo }>(
+      `/api/admin/workspace/project/${assignModal._id}/eligible-workers`, "GET", null, true,
+    ).then(result => {
+      if (!current) return;
+      if (!Array.isArray(result.workers)) throw new Error("Invalid eligibility response");
+      setAssignableWorkers(result.workers);
+      setEligibilityInfo(result.eligibilityInfo);
+    }).catch(() => {
+      if (current) setEligibilityError(true);
+    }).finally(() => { if (current) setLoadingEligible(false); });
+    return () => { current = false; };
+  }, [assignModal, eligibilityVersion]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -386,7 +375,8 @@ function ProjectsContent() {
         description: "",
         category: "microjobs",
         priority: "medium",
-        earnings: 0,
+        estimatedTasks: 1,
+        payRate: 0,
         deadline: "",
         screeningId: "",
         workPositionId: "", // PATCH_86
@@ -403,16 +393,13 @@ function ProjectsContent() {
   };
 
   const handleAssign = async () => {
-    if (!assignModal || !selectedWorker) return;
+    if (!assignModal || !assignableWorkers.some(worker => worker._id === selectedWorker)) return;
     setAssignConfirmOpen(true);
   };
 
   const executeAssign = async () => {
-    if (!assignModal || !selectedWorker) return;
+    if (!assignModal || !assignableWorkers.some(worker => worker._id === selectedWorker)) return;
     setAssigning(true);
-
-    const previousAssignee = assignModal.assignedTo?._id || null;
-    const projectId = assignModal._id;
 
     try {
       await apiRequest(
@@ -422,26 +409,13 @@ function ProjectsContent() {
         true,
       );
       setSuccess(
-        "Project assigned! Worker has been notified. Next: wait for proof submission.",
+        "Project assigned successfully.",
       );
-      setLastAssignedData({ projectId, previousAssignee });
       setAssignModal(null);
       setSelectedWorker("");
       setAssignConfirmOpen(false);
       loadProjects();
 
-      // PATCH_67: Show undo toast for assignment
-      undoToast.showUndo("Project assigned", async () => {
-        // Unassign by setting status back to pending
-        await apiRequest(
-          `/api/admin/workspace/project/${projectId}`,
-          "PUT",
-          { status: "pending", assignedTo: null },
-          true,
-        );
-        setSuccess("Assignment undone");
-        loadProjects();
-      });
     } catch (e: any) {
       setError(e.message || "Failed to assign project");
     } finally {
@@ -501,8 +475,11 @@ function ProjectsContent() {
       title: project.title || "",
       description: project.description || "",
       category: project.category || "microjobs",
+      priority: project.priority || "medium", projectType: project.projectType || "standard",
+      datasetId: typeof project.datasetId === "string" ? project.datasetId : project.datasetId?._id || "",
+      rewardPerTask: project.rewardPerTask ?? 0, estimatedTasks: project.estimatedTasks ?? 1,
       instructions: (project as any).instructions || "",
-      payRate: project.earnings || 0,
+      payRate: project.payRate || 0,
       payType: (project as any).payType || "per_task",
       deadline: project.deadline ? project.deadline.split("T")[0] : "",
       status: project.status || "open",
@@ -848,9 +825,9 @@ function ProjectsContent() {
                       </span>
                     </StatusTooltip>
                     <span
-                      className={`text-xs ${getPriorityBadge(project.priority)}`}
+                      className={`text-xs ${getPriorityBadge(project.priority || "medium")}`}
                     >
-                      ● {project.priority}
+                      ● {project.priority || "medium"}
                     </span>
                     {/* PATCH_97: Project type badge — clear labeling */}
                     {(project as any).projectType === "rlhf_dataset" ? (
@@ -874,8 +851,7 @@ function ProjectsContent() {
                   )}
                   {project.assignedTo && (
                     <p className="text-xs text-slate-500 mt-2">
-                      Assigned to: {project.assignedTo.firstName}{" "}
-                      {project.assignedTo.lastName}
+                      Assigned to: {project.assignedTo.name || [project.assignedTo.firstName, project.assignedTo.lastName].filter(Boolean).join(" ") || "Archived worker"}
                     </p>
                   )}
                 </div>
@@ -883,7 +859,7 @@ function ProjectsContent() {
                 <div className="flex max-w-full flex-wrap items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm font-medium text-emerald-400">
-                      ${project.earnings?.toFixed(2) || "0.00"}
+                      ${project.payRate?.toFixed(2) || "0.00"}
                     </p>
                     <p className="text-xs text-slate-500">Payout</p>
                   </div>
@@ -917,8 +893,7 @@ function ProjectsContent() {
                     )}
                   </div>
 
-                  {(project.status === "pending" ||
-                    project.status === "open") && (
+                  {project.status === "open" && !project.assignedTo && (
                     <button
                       onClick={() => setAssignModal(project)}
                       className="btn-secondary text-sm"
@@ -930,11 +905,11 @@ function ProjectsContent() {
                   {/* PATCH_73: Only show credit if proof was approved */}
                   {project.status === "completed" &&
                     !project.earningsCredited &&
-                    (project as any).proofApproved && (
+                    project.assignedTo && (
                       <button
                         onClick={() => {
                           setCreditModal(project);
-                          setCreditAmount(project.earnings || 0);
+                          setCreditAmount(project.payRate || 0);
                         }}
                         className="btn-primary text-sm"
                       >
@@ -1047,21 +1022,16 @@ function ProjectsContent() {
                     Category
                   </label>
                   <select
+                    disabled={Boolean(form.workPositionId)}
                     value={form.category}
                     onChange={(e) =>
                       setForm({ ...form, category: e.target.value })
                     }
                     className="input w-full"
                   >
-                    <option value="microjobs">Microjobs</option>
-                    <option value="data-entry">Data Entry</option>
-                    <option value="content">Content</option>
-                    <option value="research">Research</option>
-                    <option value="writing">Writing</option>
-                    <option value="teaching">Teaching</option>
-                    <option value="coding_math">Coding & Math</option>
-                    <option value="outlier">Outlier</option>
-                    <option value="other">Other</option>
+                    {Array.from(new Set([form.category, ...jobRoles.map(role => role.category), "microjobs", "writing", "teaching", "coding_math", "data_entry", "research", "other"])).filter(Boolean).map(category => (
+                      <option key={category} value={category}>{getJobRoleCategoryLabel(category)}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1183,9 +1153,9 @@ function ProjectsContent() {
                     type="number"
                     step="0.01"
                     min="0"
-                    value={form.earnings}
+                    value={form.payRate}
                     onChange={(e) =>
-                      setForm({ ...form, earnings: parseFloat(e.target.value) })
+                      setForm({ ...form, payRate: Number(e.target.value) })
                     }
                     className="input w-full"
                   />
@@ -1205,73 +1175,8 @@ function ProjectsContent() {
                 </div>
               </div>
 
-              {/* PATCH_95: Project Type & Dataset Linking */}
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">
-                  Project Type
-                </label>
-                <select
-                  value={form.projectType}
-                  onChange={(e) =>
-                    setForm({ ...form, projectType: e.target.value })
-                  }
-                  className="input w-full"
-                >
-                  <option value="standard">Microjob (Proof-based)</option>
-                  <option value="rlhf_dataset">AI Dataset (Task-based)</option>
-                </select>
-              </div>
-              {form.projectType === "rlhf_dataset" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">
-                      Linked Dataset <span className="text-amber-400">*</span>
-                    </label>
-                    <select
-                      value={form.datasetId}
-                      onChange={(e) =>
-                        setForm({ ...form, datasetId: e.target.value })
-                      }
-                      className="input w-full"
-                      required
-                    >
-                      <option value="">-- Select Dataset --</option>
-                      {datasetOptions.map((ds) => (
-                        <option key={ds._id} value={ds._id}>
-                          {ds.name} ({ds.datasetType})
-                        </option>
-                      ))}
-                    </select>
-                    {datasetOptions.length === 0 && (
-                      <p className="text-xs text-amber-300 mt-1">
-                        No active datasets. Create one in RLHF Datasets page
-                        first.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">
-                      Reward Per Task ($)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.rewardPerTask}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          rewardPerTask: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="input w-full"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      Credited to worker per approved task
-                    </p>
-                  </div>
-                </div>
-              )}
+              <ProjectDeliveryFields fields={form} datasets={datasetOptions} onChange={change => setForm({ ...form, ...change })} />
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -1337,6 +1242,8 @@ function ProjectsContent() {
                   <span className="animate-spin">⏳</span> Loading eligible
                   workers...
                 </div>
+              ) : eligibilityError ? (
+                <p role="alert">Eligibility could not be verified. <button type="button" className="underline" onClick={() => setEligibilityVersion(v => v + 1)}>Try again</button></p>
               ) : assignableWorkers.length === 0 ? (
                 <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm">
                   ⚠️ No eligible workers found.
@@ -1369,7 +1276,7 @@ function ProjectsContent() {
                         w.userId?.email ||
                         "Worker"}{" "}
                       -{" "}
-                      {w.category ||
+                      {w.position?.title || w.category ||
                         w.jobId?.title ||
                         w.jobId?.category ||
                         "Worker"}
@@ -1439,7 +1346,7 @@ function ProjectsContent() {
             <div className="flex justify-between">
               <span className="text-slate-400">Earnings:</span>
               <span className="text-emerald-400">
-                ${assignModal?.earnings || 0}
+                ${assignModal?.payRate || 0}
               </span>
             </div>
             <div className="flex justify-between">
@@ -1474,7 +1381,7 @@ function ProjectsContent() {
                 className="input w-full"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Default payout: ${creditModal.earnings?.toFixed(2) || "0.00"}
+                Default payout: ${creditModal.payRate?.toFixed(2) || "0.00"}
               </p>
             </div>
 
@@ -1615,20 +1522,19 @@ function ProjectsContent() {
                   </div>
                 )}
 
-                {viewData.workerProfile && (
+                {viewData.project?.assignedTo && (
                   <div className="p-3 bg-cyan-900/20 border border-cyan-500/20 rounded-lg">
                     <p className="text-xs text-slate-400 mb-1">
                       Assigned Worker
                     </p>
                     <p className="text-sm text-white">
-                      {viewData.workerProfile.user?.firstName || "Unknown"}{" "}
-                      {viewData.workerProfile.user?.lastName || "Worker"}
+                      {viewData.workerProfile?.user?.name || viewData.project.assignedTo.name || "Assigned worker"}
                     </p>
                     <p className="text-xs text-slate-400">
-                      {viewData.workerProfile.user?.email || "No email"}
+                      {viewData.workerProfile?.user?.email || viewData.project.assignedTo.email || "No email"}
                     </p>
                     <p className="text-xs text-cyan-400 mt-1">
-                      Status: {viewData.workerProfile.workerStatus || "N/A"}
+                      Status: {viewData.workerProfile?.workerStatus || viewData.project.assignedTo.workerStatus || "N/A"}
                     </p>
                   </div>
                 )}
@@ -1762,18 +1668,16 @@ function ProjectsContent() {
                     Category
                   </label>
                   <select
+                    disabled={Boolean(editModal.workPositionId)}
                     value={editForm.category}
                     onChange={(e) =>
                       setEditForm({ ...editForm, category: e.target.value })
                     }
                     className="input w-full"
                   >
-                    <option value="microjobs">Microjobs</option>
-                    <option value="writing">Writing</option>
-                    <option value="teaching">Teaching</option>
-                    <option value="coding_math">Coding & Math</option>
-                    <option value="outlier">Outlier</option>
-                    <option value="other">Other</option>
+                    {Array.from(new Set([editForm.category, ...jobRoles.map(role => role.category), "microjobs", "writing", "teaching", "coding_math", "data_entry", "research", "other"])).filter(Boolean).map(category => (
+                      <option key={category} value={category}>{getJobRoleCategoryLabel(category)}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1788,11 +1692,9 @@ function ProjectsContent() {
                     }
                     className="input w-full"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="open">Open</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="cancelled">Cancelled</option>
+                    {(["draft", "open"].includes(editModal.status) ? ["draft", "open", "cancelled"] :
+                      ["assigned", "in_progress"].includes(editModal.status) ? [editModal.status, "cancelled"] : [editModal.status])
+                      .map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
                   </select>
                 </div>
               </div>
@@ -1905,6 +1807,13 @@ function ProjectsContent() {
                 />
               </div>
 
+              <label className="block text-sm text-slate-400">Priority
+                <select className="input w-full" value={editForm.priority} onChange={e => setEditForm({ ...editForm, priority: e.target.value })}>
+                  {["low", "medium", "high", "urgent"].map(priority => <option key={priority}>{priority}</option>)}
+                </select>
+              </label>
+              <ProjectDeliveryFields fields={editForm} datasets={datasetOptions} onChange={change => setEditForm({ ...editForm, ...change })} />
+
               <div>
                 <label className="block text-sm text-slate-400 mb-1">
                   Deadline
@@ -1940,13 +1849,7 @@ function ProjectsContent() {
         </div>
       )}
 
-      {/* PATCH_67: UndoToast for assignment actions */}
-      <UndoToast
-        show={undoToast.show}
-        message={undoToast.message}
-        onUndo={undoToast.handleUndo}
-        onExpire={undoToast.handleExpire}
-      />
+
     </div>
   );
 }

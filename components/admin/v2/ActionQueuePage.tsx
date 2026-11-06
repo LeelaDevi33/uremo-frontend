@@ -40,20 +40,9 @@ interface ActionItem {
   meta?: Record<string, any>;
 }
 
-interface SystemHealth {
-  totalUsers: number;
-  activeWorkers: number;
-  ordersToday: number;
-  ordersTarget: number;
-  revenueToday: number;
-  revenueAvg: number;
-  avgResolutionTime: string;
-  resolutionGoal: string;
-}
-
 export default function ActionQueuePage() {
   const [actions, setActions] = useState<ActionItem[]>([]);
-  const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [partial, setPartial] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
 
@@ -74,8 +63,7 @@ export default function ActionQueuePage() {
         appsRes,
         screeningsRes,
         affiliateRes,
-        workersRes,
-        usersRes,
+        walletWithdrawalsRes,
       ] = await Promise.allSettled([
         apiRequest("/api/admin/orders", "GET", null, true),
         apiRequest("/api/admin/proofs", "GET", null, true),
@@ -83,10 +71,11 @@ export default function ActionQueuePage() {
         apiRequest("/api/apply-work/admin", "GET", null, true),
         apiRequest("/api/admin/workspace/screenings", "GET", null, true),
         apiRequest("/api/admin/affiliate/withdrawals", "GET", null, true),
-        apiRequest("/api/admin/workspace/workers", "GET", null, true),
-        apiRequest("/api/admin/users?limit=100", "GET", null, true),
+        apiRequest("/api/admin/wallet/withdrawals?status=pending", "GET", null, true),
       ]);
 
+      setPartial([ordersRes, proofsRes, ticketsRes, appsRes, screeningsRes, affiliateRes, walletWithdrawalsRes]
+        .some(result => result.status === "rejected"));
       const actionItems: ActionItem[] = [];
       const now = new Date();
 
@@ -102,7 +91,7 @@ export default function ActionQueuePage() {
             (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60),
           );
 
-          if (order.status === "payment_pending") {
+          if (order.status === "payment_pending" || (order.status === "pending" && (order.payment?.submittedAt || order.payment?.proofUrl) && !order.payment?.verifiedAt && order.paymentStatus !== "paid")) {
             actionItems.push({
               id: `order-payment-${order._id}`,
               type: "payment",
@@ -146,47 +135,6 @@ export default function ActionQueuePage() {
           }
         });
 
-        // Calculate today's stats
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const ordersToday = orders.filter(
-          (o: any) => new Date(o.createdAt) >= today,
-        ).length;
-        const revenueToday = orders
-          .filter(
-            (o: any) =>
-              new Date(o.createdAt) >= today && o.status !== "cancelled",
-          )
-          .reduce((sum: number, o: any) => sum + (o.amount || 0), 0);
-
-        // Get user and worker counts
-        let totalUsers = 0;
-        let activeWorkers = 0;
-
-        if (usersRes.status === "fulfilled") {
-          const users = Array.isArray(usersRes.value)
-            ? usersRes.value
-            : usersRes.value?.users || [];
-          totalUsers = users.length;
-        }
-
-        if (workersRes.status === "fulfilled") {
-          const workers = Array.isArray(workersRes.value)
-            ? workersRes.value
-            : workersRes.value?.workers || [];
-          activeWorkers = workers.filter((w: any) => w.isActive).length;
-        }
-
-        setHealth({
-          totalUsers,
-          activeWorkers,
-          ordersToday,
-          ordersTarget: 15, // Target per day
-          revenueToday,
-          revenueAvg: 1200, // Average per day
-          avgResolutionTime: calculateAvgResolution(orders),
-          resolutionGoal: "24h",
-        });
       }
 
       // Process Proofs - Blocks worker payouts
@@ -290,7 +238,7 @@ export default function ActionQueuePage() {
               priority: blockedHours > 48 ? "high" : "medium",
               revenueImpact: 0,
               blockedHours,
-              href: `/admin/workforce`,
+              href: "/admin/applications",
               actionLabel: "Review",
               meta: app,
             });
@@ -326,38 +274,22 @@ export default function ActionQueuePage() {
           });
       }
 
-      // Process Pending Withdrawals
-      if (affiliateRes.status === "fulfilled") {
-        const withdrawals = Array.isArray(affiliateRes.value)
-          ? affiliateRes.value
-          : affiliateRes.value?.withdrawals || [];
-
-        withdrawals
-          .filter((w: any) => w.status === "pending")
-          .forEach((withdrawal: any) => {
-            const createdAt = new Date(withdrawal.createdAt);
-            const blockedHours = Math.floor(
-              (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60),
-            );
-
-            actionItems.push({
-              id: `withdrawal-${withdrawal._id}`,
-              type: "withdrawal",
-              title: `Affiliate Withdrawal Request`,
-              subtitle: `Amount: $${withdrawal.amount || 0}`,
-              details: {
-                what: `Affiliate requesting withdrawal of earnings`,
-                who: `User: ${withdrawal.userId?.email || "Unknown"}`,
-                action: "Process withdrawal payment to user",
-              },
-              priority: blockedHours > 48 ? "high" : "medium",
-              revenueImpact: -(withdrawal.amount || 0),
-              blockedHours,
-              href: "/admin/affiliate",
-              actionLabel: "Process",
-              meta: withdrawal,
-            });
+      for (const [kind, response] of [["Wallet", walletWithdrawalsRes], ["Referral", affiliateRes]] as const) {
+        if (response.status !== "fulfilled") continue;
+        const rows = Array.isArray(response.value) ? response.value : response.value?.withdrawals ?? [];
+        for (const withdrawal of rows) {
+          if (withdrawal.status !== "pending") continue;
+          const blockedHours = Math.floor((now.getTime() - new Date(withdrawal.createdAt).getTime()) / 3600000);
+          const account = withdrawal.userId || withdrawal.user;
+          actionItems.push({
+            id: `${kind}-withdrawal-${withdrawal._id}`, type: "withdrawal", title: `${kind} withdrawal request`,
+            subtitle: `Amount: $${withdrawal.amount}`,
+            details: { what: `${kind} withdrawal`, who: account?.email || account?.name || "Archived account", action: "Review withdrawal" },
+            priority: blockedHours > 48 ? "high" : "medium", blockedHours, revenueImpact: 0,
+            href: kind === "Wallet" ? "/admin/wallet#withdrawal-requests" : "/admin/affiliate",
+            actionLabel: "Review", meta: withdrawal,
           });
+        }
       }
 
       // Sort by priority, then revenue impact, then time blocked
@@ -378,23 +310,6 @@ export default function ActionQueuePage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateAvgResolution = (orders: any[]): string => {
-    const completed = orders.filter(
-      (o: any) => o.status === "completed" && o.completedAt,
-    );
-    if (completed.length === 0) return "N/A";
-
-    const totalHours = completed.reduce((sum: number, o: any) => {
-      const start = new Date(o.createdAt);
-      const end = new Date(o.completedAt);
-      return sum + (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    }, 0);
-
-    const avgHours = totalHours / completed.length;
-    if (avgHours < 24) return `${Math.round(avgHours)}h`;
-    return `${Math.round(avgHours / 24)}d`;
   };
 
   const filteredActions =
@@ -433,39 +348,7 @@ export default function ActionQueuePage() {
         </p>
       </div>
 
-      {/* System Health Strip */}
-      {health && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          <HealthCard label="Users" value={health.totalUsers} icon="U" />
-          <HealthCard
-            label="Active Workers"
-            value={health.activeWorkers}
-            icon="WF"
-          />
-          <HealthCard
-            label="Orders Today"
-            value={health.ordersToday}
-            icon="Ord"
-            target={`Target: ${health.ordersTarget}/day`}
-            isGood={health.ordersToday >= health.ordersTarget}
-          />
-          <HealthCard
-            label="Revenue Today"
-            value={`$${health.revenueToday}`}
-            icon="$"
-            color="emerald"
-            target={`Avg: $${health.revenueAvg}/day`}
-            isGood={health.revenueToday >= health.revenueAvg}
-          />
-          <HealthCard
-            label="Avg Resolution"
-            value={health.avgResolutionTime}
-            icon="Avg"
-            target={`Goal: <${health.resolutionGoal}`}
-          />
-        </div>
-      )}
-
+      {partial && <p role="alert" className="mb-3 text-amber-300">Some review queues could not be loaded. <button className="underline" onClick={loadActionQueue}>Retry</button></p>}
       {/* Priority Summary */}
       <div className="flex flex-wrap gap-2 mb-4">
         <PriorityBadge
@@ -541,7 +424,7 @@ export default function ActionQueuePage() {
             <div className="text-4xl mb-3">OK</div>
             <div className="text-white font-medium">Queue Empty</div>
             <div className="text-slate-500 text-sm">
-              No pending items in this view. Check back later or refresh.
+              {partial ? "No items in the queues that responded." : "No pending items in this view."}
             </div>
           </div>
         ) : (
@@ -551,51 +434,6 @@ export default function ActionQueuePage() {
             ))}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function HealthCard({
-  label,
-  value,
-  icon,
-  color = "blue",
-  target,
-  isGood,
-}: {
-  label: string;
-  value: string | number;
-  icon: string;
-  color?: string;
-  target?: string;
-  isGood?: boolean;
-}) {
-  const colorClasses: Record<string, string> = {
-    blue: "from-blue-500/10 to-blue-500/5 border-blue-500/20",
-    emerald: "from-emerald-500/10 to-emerald-500/5 border-emerald-500/20",
-  };
-
-  return (
-    <div
-      className={`rounded-xl bg-gradient-to-br ${colorClasses[color] || colorClasses.blue} border p-3`}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{icon}</span>
-        <div>
-          <div className="text-white font-semibold flex items-center gap-1">
-            {value}
-            {isGood !== undefined && (
-              <span className={isGood ? "text-emerald-400" : "text-amber-400"}>
-                {isGood ? "✓" : "↓"}
-              </span>
-            )}
-          </div>
-          <div className="text-slate-500 text-xs">{label}</div>
-          {target && (
-            <div className="text-slate-600 text-[10px] mt-0.5">{target}</div>
-          )}
-        </div>
       </div>
     </div>
   );

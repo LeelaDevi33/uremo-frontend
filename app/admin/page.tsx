@@ -1,46 +1,10 @@
 "use client";
 
-/**
- * PATCH_97: Admin Dashboard — Overview Metrics + Action Queue
- * PATCH_109: Added Rental Revenue Intelligence block
- *
- * 5 metric blocks at the top:
- *  1. Marketplace (services, orders today, revenue)
- *  2. Workforce (active workers, projects, screenings)
- *  3. AI Data / RLHF (datasets, tasks completed)
- *  4. Finance (users, pending withdrawals, payments)
- *  5. Rental Intelligence (active, pending, expiring, revenue)
- *
- * Below: Full ActionQueue for pending actions.
- */
-
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import ActionQueuePage from "@/components/admin/v2/ActionQueuePage";
-import { EmojiDashboard } from "@/components/ui/Emoji";
-
-interface DashboardMetrics {
-  marketplace: {
-    totalServices: number;
-    ordersToday: number;
-    revenueToday: number;
-  };
-  workforce: {
-    activeWorkers: number;
-    totalProjects: number;
-    pendingScreenings: number;
-  };
-  rlhf: {
-    totalDatasets: number;
-    tasksCompleted: number;
-    pendingReviews: number;
-  };
-  finance: {
-    totalUsers: number;
-    pendingWithdrawals: number;
-    pendingPayments: number;
-  };
-}
+import Link from "next/link";
+import { useAdminContext } from "@/components/admin/v2/AdminLayoutV2";
 
 interface RentalMetrics {
   activeRentals: number;
@@ -99,17 +63,17 @@ function MetricBlock({
 }
 
 export default function AdminDashboard() {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const { summary, summaryError, refreshBadges } = useAdminContext();
   const [rentalMetrics, setRentalMetrics] = useState<RentalMetrics | null>(
     null,
   );
   const [financeMetrics, setFinanceMetrics] = useState<FinanceMetrics | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
+
 
   useEffect(() => {
-    loadMetrics();
+
     loadRentalMetrics();
     loadFinanceMetrics();
   }, []);
@@ -146,205 +110,38 @@ export default function AdminDashboard() {
     }
   };
 
-  const loadMetrics = async () => {
-    try {
-      const [
-        ordersRes,
-        workersRes,
-        servicesRes,
-        datasetsRes,
-        usersRes,
-        withdrawalsRes,
-      ] = await Promise.allSettled([
-        apiRequest("/api/admin/orders", "GET", null, true),
-        apiRequest("/api/admin/workspace/workers", "GET", null, true),
-        apiRequest("/api/admin/services", "GET", null, true),
-        apiRequest("/api/admin/datasets", "GET", null, true),
-        apiRequest("/api/admin/users?limit=100", "GET", null, true),
-        apiRequest("/api/admin/affiliate/withdrawals", "GET", null, true),
-      ]);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const orders =
-        ordersRes.status === "fulfilled"
-          ? Array.isArray(ordersRes.value)
-            ? ordersRes.value
-            : ordersRes.value?.orders || []
-          : [];
-      const ordersToday = orders.filter(
-        (o: any) => new Date(o.createdAt) >= today,
-      ).length;
-      const revenueToday = orders
-        .filter(
-          (o: any) =>
-            new Date(o.createdAt) >= today && o.status !== "cancelled",
-        )
-        .reduce((sum: number, o: any) => sum + (o.amount || 0), 0);
-      const pendingPayments = orders.filter(
-        (o: any) => o.status === "payment_pending",
-      ).length;
-
-      const workers =
-        workersRes.status === "fulfilled"
-          ? Array.isArray(workersRes.value)
-            ? workersRes.value
-            : workersRes.value?.workers || []
-          : [];
-      const activeWorkers = workers.filter((w: any) => w.isActive).length;
-
-      const services =
-        servicesRes.status === "fulfilled"
-          ? Array.isArray(servicesRes.value)
-            ? servicesRes.value
-            : servicesRes.value?.services || []
-          : [];
-
-      const datasets =
-        datasetsRes.status === "fulfilled"
-          ? Array.isArray(datasetsRes.value)
-            ? datasetsRes.value
-            : datasetsRes.value?.datasets || []
-          : [];
-      const tasksCompleted = datasets.reduce(
-        (sum: number, d: any) => sum + (d.completedTasks || 0),
-        0,
-      );
-      const pendingReviews = datasets.reduce(
-        (sum: number, d: any) => sum + (d.pendingReviews || 0),
-        0,
-      );
-
-      const users =
-        usersRes.status === "fulfilled"
-          ? Array.isArray(usersRes.value)
-            ? usersRes.value
-            : usersRes.value?.users || []
-          : [];
-
-      const withdrawals =
-        withdrawalsRes.status === "fulfilled"
-          ? Array.isArray(withdrawalsRes.value)
-            ? withdrawalsRes.value
-            : withdrawalsRes.value?.withdrawals || []
-          : [];
-      const pendingWithdrawals = withdrawals.filter(
-        (w: any) => w.status === "pending",
-      ).length;
-
-      const totalProjects = workers.reduce(
-        (sum: number, w: any) =>
-          sum +
-          (w.assignedProjects?.length || 0) +
-          (w.completedProjects?.length || 0),
-        0,
-      );
-
-      setMetrics({
-        marketplace: {
-          totalServices: services.length,
-          ordersToday,
-          revenueToday,
-        },
-        workforce: {
-          activeWorkers,
-          totalProjects,
-          pendingScreenings: 0,
-        },
-        rlhf: {
-          totalDatasets: datasets.length,
-          tasksCompleted,
-          pendingReviews,
-        },
-        finance: {
-          totalUsers: users.length,
-          pendingWithdrawals,
-          pendingPayments,
-        },
-      });
-    } catch (err) {
-      console.error("Failed to load dashboard metrics:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* PATCH_97: Overview Metrics Grid */}
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-white/10 p-5 animate-pulse"
-            >
-              <div className="h-6 w-1/2 bg-white/10 rounded mb-4" />
-              <div className="grid grid-cols-3 gap-3">
-                <div className="h-10 bg-white/10 rounded" />
-                <div className="h-10 bg-white/10 rounded" />
-                <div className="h-10 bg-white/10 rounded" />
-              </div>
-            </div>
-          ))}
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Admin dashboard</h1>
+        <div className="flex flex-wrap gap-4">
+          <Link className="text-emerald-300 underline" href="/admin/opportunities">Manage opportunities</Link>
+          <Link className="text-emerald-300 underline" href="/admin/opportunities#receipt-heading">Access receipts</Link>
         </div>
-      ) : metrics ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricBlock
-            title="Marketplace"
-            icon="🏪"
-            color="border-blue-500/30 bg-blue-500/5"
-            metrics={[
-              { label: "Services", value: metrics.marketplace.totalServices },
-              { label: "Orders Today", value: metrics.marketplace.ordersToday },
-              {
-                label: "Revenue Today",
-                value: `$${metrics.marketplace.revenueToday.toFixed(0)}`,
-              },
-            ]}
-          />
-          <MetricBlock
-            title="Workforce"
-            icon="👷"
-            color="border-emerald-500/30 bg-emerald-500/5"
-            metrics={[
-              {
-                label: "Active Workers",
-                value: metrics.workforce.activeWorkers,
-              },
-              { label: "Projects", value: metrics.workforce.totalProjects },
-              {
-                label: "Screenings",
-                value: metrics.workforce.pendingScreenings,
-              },
-            ]}
-          />
-          <MetricBlock
-            title="AI Data / RLHF"
-            icon="🧠"
-            color="border-purple-500/30 bg-purple-500/5"
-            metrics={[
-              { label: "Datasets", value: metrics.rlhf.totalDatasets },
-              { label: "Tasks Done", value: metrics.rlhf.tasksCompleted },
-              { label: "Pending QA", value: metrics.rlhf.pendingReviews },
-            ]}
-          />
-          <MetricBlock
-            title="Finance"
-            icon="💰"
-            color="border-amber-500/30 bg-amber-500/5"
-            metrics={[
-              { label: "Users", value: metrics.finance.totalUsers },
-              {
-                label: "Withdrawals",
-                value: metrics.finance.pendingWithdrawals,
-              },
-              { label: "Payments", value: metrics.finance.pendingPayments },
-            ]}
-          />
-        </div>
-      ) : null}
+      </header>
+      {summaryError && <p role="alert">Dashboard counts could not be refreshed. <button type="button" className="underline" onClick={refreshBadges}>Retry</button></p>}
+      {!summary && !summaryError && <p role="status">Loading dashboard counts…</p>}
+      {summary && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricBlock title="Marketplace" icon="" color="border-blue-500/30 bg-blue-500/5" metrics={[
+          {label: "Published listings", value: summary.marketplace.published},
+          {label: "Active rentals", value: summary.marketplace.activeRentals},
+          {label: "Exclusive sales", value: summary.marketplace.sales},
+        ]} />
+        <MetricBlock title="Workforce" icon="" color="border-emerald-500/30 bg-emerald-500/5" metrics={[
+          {label: "Pending applications", value: summary.badges.pendingApplications},
+          {label: "Projects", value: summary.projects},
+          {label: "Pending proofs", value: summary.badges.pendingProofs},
+        ]} />
+        <MetricBlock title="Dataset reviews" icon="" color="border-purple-500/30 bg-purple-500/5" metrics={[
+          {label: "Datasets", value: summary.datasets}, {label: "Approved submissions", value: summary.approvedSubmissions},
+          {label: "Pending reviews", value: summary.pendingReviews},
+        ]} />
+        <MetricBlock title="Finance queues" icon="" color="border-amber-500/30 bg-amber-500/5" metrics={[
+          {label: "Wallet withdrawals", value: summary.badges.walletWithdrawals},
+          {label: "Referral payouts", value: summary.badges.referralWithdrawals},
+          {label: "Top-ups to review", value: summary.badges.pendingTopups},
+        ]} />
+      </div>}
 
       {/* PATCH_109: Rental Revenue Intelligence Block */}
       {rentalMetrics && (
@@ -352,7 +149,7 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🔑</span>
             <h3 className="font-semibold text-white text-sm">
-              Rental Revenue Intelligence
+              Legacy service rental history
             </h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -413,10 +210,10 @@ export default function AdminDashboard() {
           <h3 className="text-sm font-semibold text-emerald-300 mb-3">
             💰 Finance Ledger Dashboard
           </h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-3 text-center">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 gap-3 text-center">
             <div>
               <p className="text-lg font-bold text-emerald-300">
-                ${financeMetrics.totalWalletLiabilities.toFixed(0)}
+                ${financeMetrics.totalWalletLiabilities.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Wallet Liabilities
@@ -424,54 +221,47 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-lg font-bold text-yellow-300">
-                ${financeMetrics.pendingWithdrawals.toFixed(0)}
+                ${financeMetrics.pendingWithdrawals.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">Pending W/D</p>
             </div>
             <div>
               <p className="text-lg font-bold text-blue-300">
-                ${financeMetrics.lifetimeEarningsPaid.toFixed(0)}
+                ${financeMetrics.lifetimeEarningsPaid.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">Earnings Paid</p>
             </div>
             <div>
               <p className="text-lg font-bold text-cyan-300">
-                ${financeMetrics.purchaseRevenue.toFixed(0)}
+                ${financeMetrics.purchaseRevenue.toFixed(2)}
               </p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Purchase Rev</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Legacy purchases</p>
             </div>
             <div>
               <p className="text-lg font-bold text-purple-300">
-                ${financeMetrics.rentalRevenue.toFixed(0)}
+                ${financeMetrics.rentalRevenue.toFixed(2)}
               </p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Rental Rev</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Legacy rentals</p>
             </div>
             <div>
               <p className="text-lg font-bold text-green-300">
-                ${financeMetrics.topupTotal.toFixed(0)}
+                ${financeMetrics.topupTotal.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">Topup Total</p>
             </div>
             <div>
               <p className="text-lg font-bold text-red-300">
-                ${financeMetrics.withdrawalTotal.toFixed(0)}
+                ${financeMetrics.withdrawalTotal.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">Withdrawn</p>
             </div>
             <div>
               <p className="text-lg font-bold text-orange-300">
-                ${financeMetrics.refundTotal.toFixed(0)}
+                ${financeMetrics.refundTotal.toFixed(2)}
               </p>
               <p className="text-[10px] text-slate-400 mt-0.5">Refunds</p>
             </div>
-            <div>
-              <p
-                className={`text-lg font-bold ${financeMetrics.platformRevenue >= 0 ? "text-emerald-400" : "text-red-400"}`}
-              >
-                ${financeMetrics.platformRevenue.toFixed(0)}
-              </p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Net Revenue</p>
-            </div>
+
           </div>
         </div>
       )}

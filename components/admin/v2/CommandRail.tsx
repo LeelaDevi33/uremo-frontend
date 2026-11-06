@@ -8,6 +8,7 @@
  * Groups by WORKFLOWS, not features.
  */
 
+import type { BadgeCounts } from "./AdminLayoutV2";
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -31,16 +32,7 @@ interface CommandRailProps {
   onToggle: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
-  badges: {
-    pendingOrders: number;
-    pendingProofs: number;
-    openTickets: number;
-    pendingPayments: number;
-    pendingApplications: number;
-    stuckOrders: number;
-    invalidScreenings: number;
-    pendingWithdrawals: number;
-  };
+  badges: BadgeCounts;
 }
 
 export default function CommandRail({
@@ -59,7 +51,7 @@ export default function CommandRail({
     badges.pendingOrders +
     badges.pendingProofs +
     badges.openTickets +
-    badges.pendingPayments +
+    badges.walletWithdrawals + badges.referralWithdrawals + badges.pendingTopups + badges.pendingApplications +
     badges.stuckOrders +
     badges.invalidScreenings;
 
@@ -84,16 +76,18 @@ export default function CommandRail({
       id: "marketplace",
       label: "Marketplace Operations",
       icon: <MarketplaceIcon />,
-      badge: badges.pendingOrders + badges.pendingPayments,
+      badge: badges.pendingOrders,
       items: [
         { label: "Opportunities", href: "/admin/opportunities" },
+        { label: "Service requests", href: "/admin/service-requests" },
+        { label: "Archived orders", href: "/admin/cancelled-orders" },
         { label: "Legacy services", href: "/admin/services" },
         { label: "Orders", href: "/admin/orders", badge: badges.pendingOrders },
         { label: "Rentals", href: "/admin/rentals" },
         {
-          label: "Payments",
+          label: "Legacy payment settings",
           href: "/admin/payments",
-          badge: badges.pendingPayments,
+
         },
       ],
     },
@@ -106,6 +100,11 @@ export default function CommandRail({
         badges.invalidScreenings +
         badges.pendingApplications,
       items: [
+        { label: "Applications", href: "/admin/applications", badge: badges.pendingApplications },
+        { label: "Screening reviews", href: "/admin/workspace/screening-reviews" },
+        { label: "Worker directory", href: "/admin/workforce" },
+        { label: "Workforce overview", href: "/admin/workspace" },
+        { label: "Master workspace", href: "/admin/workspace/master" },
         { label: "Job Roles", href: "/admin/work-positions" },
         {
           label: "Screenings",
@@ -131,13 +130,15 @@ export default function CommandRail({
       id: "finance",
       label: "Finance",
       icon: <FinanceIcon />,
-      badge: badges.pendingWithdrawals,
+      badge: badges.walletWithdrawals + badges.referralWithdrawals + badges.pendingTopups,
       items: [
-        { label: "Wallet", href: "/admin/wallet" },
+        { label: "Wallet and top-ups", href: "/admin/wallet", badge: badges.pendingTopups },
+        { label: "Wallet withdrawals", href: "/admin/wallet#withdrawal-requests", badge: badges.walletWithdrawals },
+        { label: "Referral accounts", href: "/admin/affiliates" },
         {
-          label: "Withdrawals",
+          label: "Referral payouts",
           href: "/admin/affiliate",
-          badge: badges.pendingWithdrawals,
+          badge: badges.referralWithdrawals,
         },
       ],
     },
@@ -147,6 +148,7 @@ export default function CommandRail({
       icon: <SupportIcon />,
       badge: badges.openTickets,
       items: [
+        { label: "Inbox", href: "/admin/messages" },
         { label: "Tickets", href: "/admin/tickets", badge: badges.openTickets },
       ],
     },
@@ -155,6 +157,10 @@ export default function CommandRail({
       label: "System",
       icon: <SystemIcon />,
       items: [
+        { label: "Blog posts", href: "/admin/blogs" },
+        { label: "Campaigns", href: "/admin/campaigns" },
+        { label: "Email campaigns", href: "/admin/email" },
+        { label: "JarvisX", href: "/admin/jarvisx" },
         { label: "Settings", href: "/admin/settings" },
         { label: "Analytics", href: "/admin/analytics" },
       ],
@@ -221,14 +227,14 @@ export default function CommandRail({
                     <span className="flex-1 font-medium text-sm">
                       {section.label}
                     </span>
-                    {section.badge && section.badge > 0 && (
+                    {section.badge !== undefined && section.badge > 0 && (
                       <span className="px-1.5 py-0.5 text-xs font-bold rounded bg-red-500 text-white">
                         {section.badge}
                       </span>
                     )}
                   </>
                 )}
-                {collapsed && section.badge && section.badge > 0 && (
+                {collapsed && section.badge !== undefined && section.badge > 0 && (
                   <span className="absolute left-10 top-0 w-4 h-4 text-[10px] font-bold rounded-full bg-red-500 text-white flex items-center justify-center">
                     {section.badge > 9 ? "9+" : section.badge}
                   </span>
@@ -256,7 +262,7 @@ export default function CommandRail({
                 >
                   <span className="w-5 h-5 flex-shrink-0 relative">
                     {section.icon}
-                    {collapsed && section.badge && section.badge > 0 && (
+                    {collapsed && section.badge !== undefined && section.badge > 0 && (
                       <span className="absolute -top-1 -right-1 w-3.5 h-3.5 text-[8px] font-bold rounded-full bg-red-500 text-white flex items-center justify-center">
                         {section.badge > 9 ? "!" : section.badge}
                       </span>
@@ -267,7 +273,7 @@ export default function CommandRail({
                       <span className="flex-1 font-medium text-sm text-left">
                         {section.label}
                       </span>
-                      {section.badge && section.badge > 0 && (
+                      {section.badge !== undefined && section.badge > 0 && (
                         <span className="px-1.5 py-0.5 text-xs font-bold rounded bg-red-500/80 text-white mr-1">
                           {section.badge}
                         </span>
