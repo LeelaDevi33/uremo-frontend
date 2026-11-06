@@ -8,7 +8,7 @@
  * Groups by WORKFLOWS, not features.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -29,6 +29,8 @@ interface NavSection {
 interface CommandRailProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
   badges: {
     pendingOrders: number;
     pendingProofs: number;
@@ -44,6 +46,8 @@ interface CommandRailProps {
 export default function CommandRail({
   collapsed,
   onToggle,
+  mobileOpen,
+  onCloseMobile,
   badges,
 }: CommandRailProps) {
   const pathname = usePathname();
@@ -82,10 +86,10 @@ export default function CommandRail({
       icon: <MarketplaceIcon />,
       badge: badges.pendingOrders + badges.pendingPayments,
       items: [
-        { label: "Services", href: "/admin/services" },
+        { label: "Opportunities", href: "/admin/opportunities" },
+        { label: "Legacy services", href: "/admin/services" },
         { label: "Orders", href: "/admin/orders", badge: badges.pendingOrders },
         { label: "Rentals", href: "/admin/rentals" },
-        { label: "Deals", href: "/admin/rentals" },
         {
           label: "Payments",
           href: "/admin/payments",
@@ -132,7 +136,7 @@ export default function CommandRail({
         { label: "Wallet", href: "/admin/wallet" },
         {
           label: "Withdrawals",
-          href: "/admin/affiliates/withdrawals",
+          href: "/admin/affiliate",
           badge: badges.pendingWithdrawals,
         },
       ],
@@ -159,7 +163,7 @@ export default function CommandRail({
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin";
-    return pathname?.startsWith(href);
+    return pathname === href || pathname?.startsWith(href + "/");
   };
 
   const isSectionActive = (section: NavSection) => {
@@ -168,9 +172,12 @@ export default function CommandRail({
   };
 
   return (
-    <div
+    <aside
+      id="admin-navigation"
+      aria-label="Admin navigation"
       className={`fixed left-0 top-0 h-full bg-[#0a0d14] border-r border-white/5 
-                  transition-all duration-300 z-50 flex flex-col
+                  transition-all duration-300 z-50 flex-col lg:flex
+                  ${mobileOpen ? "flex" : "hidden"}
                   ${collapsed ? "w-16" : "w-64"}`}
     >
       {/* Header */}
@@ -182,10 +189,13 @@ export default function CommandRail({
         )}
         <button
           onClick={onToggle}
-          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+          aria-label={collapsed ? "Expand admin navigation" : "Collapse admin navigation"}
+          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 hidden lg:flex items-center justify-center text-slate-400 hover:text-white transition-colors"
         >
           {collapsed ? "→" : "←"}
         </button>
+        <button type="button" aria-label="Close admin navigation" onClick={onCloseMobile}
+          className="ml-auto rounded px-3 py-2 text-sm text-white lg:hidden">Close</button>
       </div>
 
       {/* Navigation */}
@@ -196,6 +206,8 @@ export default function CommandRail({
               // Direct link section (Master Workspace)
               <Link
                 href={section.href}
+                aria-label={section.label}
+                onClick={onCloseMobile}
                 className={`flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg transition-all
                            ${
                              isSectionActive(section)
@@ -226,11 +238,14 @@ export default function CommandRail({
               // Expandable section
               <>
                 <button
-                  onClick={() =>
+                  aria-label={section.label}
+                  aria-expanded={!collapsed && expandedSection === section.id}
+                  onClick={() => {
+                    if (collapsed) onToggle();
                     setExpandedSection(
-                      expandedSection === section.id ? null : section.id,
-                    )
-                  }
+                      !collapsed && expandedSection === section.id ? null : section.id,
+                    );
+                  }}
                   className={`w-full flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg transition-all
                              ${
                                isSectionActive(section)
@@ -275,6 +290,7 @@ export default function CommandRail({
                         <Link
                           key={item.href}
                           href={item.href}
+                          onClick={onCloseMobile}
                           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all
                                    ${
                                      isActive(item.href)
@@ -311,7 +327,7 @@ export default function CommandRail({
           </div>
         )}
       </div>
-    </div>
+    </aside>
   );
 }
 

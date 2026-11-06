@@ -27,11 +27,6 @@ interface Blog {
   viewCount?: number;
 }
 
-interface ServiceOption {
-  _id: string;
-  title: string;
-}
-
 const CATEGORY_OPTIONS = [
   { value: "microjobs", label: "Microjobs" },
   { value: "forex_crypto", label: "Forex & Crypto" },
@@ -49,7 +44,6 @@ const STATUS_OPTIONS = [
 export default function AdminBlogsPage() {
   const router = useRouter();
   const [blogs, setBlogs] = useState<Blog[]>([]);
-  const [services, setServices] = useState<ServiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +58,6 @@ export default function AdminBlogsPage() {
     content: "",
     category: "general",
     status: "draft",
-    relatedServices: [] as string[],
   });
   const [featuredImageFile, setFeaturedImageFile] = useState<File | null>(null);
   const [featuredImagePreview, setFeaturedImagePreview] = useState<
@@ -80,7 +73,7 @@ export default function AdminBlogsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Load blogs and services
+  // Load blog posts independently from the retired service catalogue.
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -90,25 +83,8 @@ export default function AdminBlogsPage() {
         return;
       }
 
-      const [blogsRes, servicesRes] = await Promise.all([
-        apiRequest("/api/admin/blogs", "GET", null, true),
-        apiRequest("/api/services"),
-      ]);
-
-      if (blogsRes?.ok) {
-        setBlogs(blogsRes.blogs || []);
-      }
-      if (servicesRes?.ok || Array.isArray(servicesRes)) {
-        const servicesData = Array.isArray(servicesRes)
-          ? servicesRes
-          : servicesRes.services || [];
-        setServices(
-          servicesData.map((s: { _id: string; title: string }) => ({
-            _id: s._id,
-            title: s.title,
-          })),
-        );
-      }
+      const blogsRes = await apiRequest("/api/admin/blogs", "GET", null, true);
+      if (blogsRes?.ok) setBlogs(blogsRes.blogs || []);
     } catch (err) {
       console.error("Failed to load data:", err);
       setError("Failed to load blogs");
@@ -140,7 +116,6 @@ export default function AdminBlogsPage() {
       content: "",
       category: "general",
       status: "draft",
-      relatedServices: [],
     });
     setFeaturedImageFile(null);
     setFeaturedImagePreview(null);
@@ -163,7 +138,6 @@ export default function AdminBlogsPage() {
       content: blog.content,
       category: blog.category,
       status: blog.status,
-      relatedServices: blog.relatedServices?.map((s) => s._id) || [],
     });
     setExistingFeaturedImage(blog.featuredImage || null);
     setFeaturedImagePreview(null);
@@ -307,16 +281,6 @@ export default function AdminBlogsPage() {
       console.error("Delete failed:", err);
       setError("Failed to delete blog");
     }
-  };
-
-  // Toggle related service
-  const toggleRelatedService = (serviceId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      relatedServices: prev.relatedServices.includes(serviceId)
-        ? prev.relatedServices.filter((id) => id !== serviceId)
-        : [...prev.relatedServices, serviceId],
-    }));
   };
 
   // Filter blogs
@@ -566,43 +530,7 @@ export default function AdminBlogsPage() {
                   </div>
                 </div>
 
-                {/* Related Services */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    Related Services
-                  </label>
-                  <div className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] p-2">
-                    {services.length === 0 ? (
-                      <p className="text-sm text-slate-500 text-center py-4">
-                        No services available
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {services.map((service) => (
-                          <label
-                            key={service._id}
-                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.relatedServices.includes(
-                                service._id,
-                              )}
-                              onChange={() => toggleRelatedService(service._id)}
-                              className="w-4 h-4 rounded border-white/30 bg-white/5 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-slate-300">
-                              {service.title}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Select services to display in "Related Services" section
-                  </p>
-                </div>
+                {editingId && <p className="text-xs text-slate-400">Existing legacy service associations are preserved when editing this post.</p>}
               </div>
 
               {/* Form Actions */}

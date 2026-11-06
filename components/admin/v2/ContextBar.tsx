@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 interface ContextBarProps {
+  menuButton?: React.ReactNode;
   title?: string;
   subtitle?: string;
   actions?: React.ReactNode;
@@ -16,6 +17,7 @@ interface ContextBarProps {
 }
 
 export default function ContextBar({
+  menuButton,
   title,
   subtitle,
   actions,
@@ -31,6 +33,7 @@ export default function ContextBar({
       <div className="flex items-center justify-between h-14 px-4 lg:px-6">
         {/* Left: Breadcrumbs + Title */}
         <div className="flex items-center gap-4 min-w-0">
+          {menuButton}
           {/* Breadcrumbs */}
           <nav className="hidden sm:flex items-center gap-1.5 text-sm">
             {autoBreadcrumbs.map((crumb, idx) => (
@@ -87,12 +90,12 @@ function QuickActionsMenu() {
         <span className="hidden sm:inline">Quick Action</span>
       </button>
 
-      <div className="absolute right-0 top-full mt-1 w-48 py-1 bg-[#12151e] border border-white/10 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+      <div className="absolute right-0 top-full mt-1 w-48 py-1 bg-[#12151e] border border-white/10 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-all">
         <Link
-          href="/admin/services"
+          href="/admin/opportunities"
           className="block px-4 py-2 text-sm text-slate-300 hover:bg-white/5 hover:text-white"
         >
-          Add Service
+          Manage opportunities
         </Link>
         <Link
           href="/admin/work-positions"

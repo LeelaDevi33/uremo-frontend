@@ -353,7 +353,7 @@ export default function ActionQueuePage() {
               priority: blockedHours > 48 ? "high" : "medium",
               revenueImpact: -(withdrawal.amount || 0),
               blockedHours,
-              href: `/admin/affiliates/withdrawals`,
+              href: "/admin/affiliate",
               actionLabel: "Process",
               meta: withdrawal,
             });
@@ -709,7 +709,8 @@ function ActionRow({ action }: { action: ActionItem }) {
   const style = priorityStyles[action.priority];
 
   const formatWaitTime = (hours: number) => {
-    if (hours >= 999) return "Invalid";
+    if (action.type === "screening") return "Needs questions";
+    if (!Number.isFinite(hours)) return "Age unavailable";
     if (hours < 1) return "Just now";
     if (hours < 24) return `Waiting: ${hours}h`;
     const days = Math.floor(hours / 24);

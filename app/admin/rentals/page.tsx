@@ -200,15 +200,13 @@ export default function AdminRentalsPage() {
             No Rentals Yet
           </h3>
           <p className="text-slate-400 mb-2">
-            Rentals appear here when users purchase time-based access to your
-            services.
+            This view tracks existing service rentals.
           </p>
           <p className="text-xs text-slate-500">
-            Tip: Add a rental-type service in{" "}
-            <a href="/admin/services" className="text-cyan-400 hover:underline">
-              Services
+            Manage new project rentals in{" "}
+            <a href="/admin/opportunities" className="text-cyan-400 hover:underline">
+              Opportunities
             </a>{" "}
-            to enable rental purchases.
           </p>
         </div>
       ) : (

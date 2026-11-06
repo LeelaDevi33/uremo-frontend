@@ -12,7 +12,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, createContext, useContext, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import CommandRail from "@/components/admin/v2/CommandRail";
@@ -54,6 +54,26 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
   const { ready, isLoggedIn, isAdmin } = useAuth();
 
   const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeMobile = () => {
+    setMobileOpen(false);
+    requestAnimationFrame(() => menuButton.current?.focus());
+  };
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const onResize = () => { if (desktop.matches) setMobileOpen(false); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeMobile(); };
+    const closeButton = document.querySelector<HTMLButtonElement>('#admin-navigation [aria-label="Close admin navigation"]');
+    closeButton?.focus();
+    desktop.addEventListener("change", onResize);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      desktop.removeEventListener("change", onResize);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen]);
   const [badges, setBadges] = useState<BadgeCounts>({
     pendingOrders: 0,
     pendingProofs: 0,
@@ -220,18 +240,31 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
       <div className="min-h-screen bg-[#050810] flex">
         {/* Command Rail */}
         <CommandRail
-          collapsed={railCollapsed}
+          collapsed={railCollapsed && !mobileOpen}
           onToggle={() => setRailCollapsed(!railCollapsed)}
+          mobileOpen={mobileOpen}
+          onCloseMobile={closeMobile}
           badges={badges}
         />
+        {mobileOpen && (
+          <button type="button" aria-label="Dismiss navigation overlay" onClick={closeMobile}
+            className="fixed inset-0 z-40 bg-black/60 lg:hidden" />
+        )}
 
         {/* Main Content Area */}
         <div
-          className={`flex-1 flex flex-col transition-all duration-300
-                     ${railCollapsed ? "ml-16" : "ml-64"}`}
+          inert={mobileOpen}
+          className={`min-w-0 flex-1 flex flex-col transition-all duration-300
+                     ${railCollapsed ? "lg:ml-16" : "lg:ml-64"}`}
         >
           {/* Context Bar */}
-          <ContextBar />
+          <ContextBar menuButton={
+            <button type="button" ref={menuButton} aria-controls="admin-navigation"
+              aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}
+              className="rounded border border-white/15 px-3 py-2 text-sm text-white lg:hidden">
+              Admin menu
+            </button>
+          } />
 
           {/* Page Content */}
           <main className="flex-1 overflow-y-auto">{children}</main>

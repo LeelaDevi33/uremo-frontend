@@ -590,7 +590,7 @@ function ProjectsContent() {
         >
           ← Master Workspace
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-3xl">📋</span>
             <div>
@@ -701,7 +701,7 @@ function ProjectsContent() {
           <div className="flex items-start gap-3">
             <span className="text-2xl">📦</span>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-white mb-1">
+              <h3 className="break-words text-sm font-semibold text-white mb-1">
                 Project Workflow:
               </h3>
               <ul className="text-sm text-slate-300 space-y-1">
@@ -832,9 +832,9 @@ function ProjectsContent() {
               key={project._id}
               className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col items-start justify-between gap-4 xl:flex-row">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-white">
                       {project.title}
                     </h3>
@@ -880,7 +880,7 @@ function ProjectsContent() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex max-w-full flex-wrap items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm font-medium text-emerald-400">
                       ${project.earnings?.toFixed(2) || "0.00"}
