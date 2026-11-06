@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ApiError, apiRequest } from "@/lib/api";
 import { formatOrderPrice, getOrderPrice } from "@/lib/orderPrice";
 import { orderPaymentState } from "@/lib/orderPaymentState";
@@ -116,6 +117,8 @@ function OrderDetailsContent() {
   const [chatGlow, setChatGlow] = useState(false);
   const chatSectionRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLInputElement | null>(null);
+  const chatEnabled = authReady && isAuthenticated && order?._id === orderId &&
+    (user?.role === "admin" || ["in_progress", "completed", "waiting_user"].includes(order.status));
 
   // Socket.io realtime chat
   const {
@@ -130,8 +133,8 @@ function OrderDetailsContent() {
     startTyping,
     reconnect,
   } = useChatSocket({
-    orderId: orderId || null,
-    enabled: authReady && isAuthenticated && Boolean(orderId),
+    orderId: chatEnabled ? orderId : null,
+    enabled: chatEnabled,
     onError: (err) => {
       if (process.env.NODE_ENV !== "production") {
         console.warn("[Socket] Error:", err);
@@ -241,26 +244,27 @@ function OrderDetailsContent() {
 
   // Mark messages as seen when they arrive
   useEffect(() => {
+    if (!chatEnabled) return;
     const unreadIds = messages
       .filter((m) => getMessageSenderRole(m) === "admin" && m.status !== "seen")
       .map((m) => m._id);
     if (unreadIds.length > 0) {
       markSeen(unreadIds);
     }
-  }, [messages, markSeen, getMessageSenderRole]);
+  }, [chatEnabled, messages, markSeen, getMessageSenderRole]);
 
   // If deep-linked to chat via ?chat=1, open chat on load.
   useEffect(() => {
     const wantsChat = searchParams?.get("chat") === "1";
     if (!wantsChat) return;
     if (loading) return;
-    if (!order) return;
+    if (!chatEnabled) return;
 
     scrollToChat({ focus: true, behavior: "auto" });
     setChatGlow(true);
     const id = window.setTimeout(() => setChatGlow(false), 2000);
     return () => window.clearTimeout(id);
-  }, [searchParams, loading, order]);
+  }, [searchParams, loading, chatEnabled]);
 
   const paymentState = order && orderPaymentState(order);
   const isPendingPayment = order?.status === "pending" && paymentState === "unpaid";
@@ -413,7 +417,7 @@ function OrderDetailsContent() {
       </div>
 
       {/* Support banner */}
-      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+      {chatEnabled && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-sm font-semibold text-white">
@@ -437,7 +441,7 @@ function OrderDetailsContent() {
             {ui.chatNowText}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* PATCH_37: Order Progress Stepper */}
       <OrderStepper status={order.status} />
@@ -623,6 +627,7 @@ function OrderDetailsContent() {
         </div>
       </div>
 
+      {chatEnabled ? <>
       <div className="space-y-3">
         <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -673,6 +678,10 @@ function OrderDetailsContent() {
           inputRefExternal={chatInputRef}
         />
       </div>
+      </> : <div className="rounded-xl border border-white/10 p-4">
+        <p className="text-sm text-slate-300">Order chat is unavailable for this status.</p>
+        <Link href="/support/tickets" className="mt-2 inline-block text-sm text-teal-200 underline">View support tickets</Link>
+      </div>}
     </div>
   );
 }
