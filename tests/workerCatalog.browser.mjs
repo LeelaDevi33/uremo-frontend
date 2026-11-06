@@ -32,6 +32,10 @@ test("workers browse roles and projects separately, with permission-aware checko
       if (path === "/api/work-positions") body = [role];
       if (path === "/api/opportunities") body = {opportunities:[view,legacy]};
       if (path === "/api/opportunities/"+project._id) body = {opportunity:view};
+      if (path === "/api/workspace/project/"+project.projectId) body = { acquiredProject: {
+        title: project.title, description: project.description, accessType: "rent",
+        endsAt: new Date(Date.now() + 5000).toISOString(), handoff: "Time-limited project handoff",
+      } };
       if (path === "/api/opportunities/"+legacy._id) body = {opportunity:legacy};
       if (path === "/api/wallet/balance") body = {balance:90,spendable:90};
       if (req.method() === "POST" && path === "/api/opportunities/"+project._id+"/buy") {
@@ -85,4 +89,8 @@ test("workers browse roles and projects separately, with permission-aware checko
   await history.getByRole("button",{name:"Show access details"}).click();
   await history.getByText("Original historical handoff").waitFor();
   assert.equal(await worker.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),true);
+  await visit(worker,"/workspace/project/"+project.projectId);
+  await worker.getByText("Time-limited project handoff",{exact:true}).waitFor();
+  await worker.getByText("This project's rental term has ended.",{exact:true}).waitFor({timeout:20000});
+  assert.equal(await worker.getByText("Time-limited project handoff",{exact:true}).count(),0);
 });
