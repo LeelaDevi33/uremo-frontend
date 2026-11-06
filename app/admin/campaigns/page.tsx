@@ -7,7 +7,11 @@ import PageHeader from "@/components/ui/PageHeader";
 import { EmojiCampaigns } from "@/components/ui/Emoji";
 import { useState, useEffect } from "react";
 
-const INTEREST_OPTIONS = ["microjobs", "forex", "wallets", "crypto", "rentals"];
+const INTEREST_LABELS: Record<string, string> = {
+  microjobs: "Open roles",
+  rentals: "Project rentals",
+  project_purchase: "Project purchases",
+};
 
 export default function CampaignsPage() {
   const { user, isAuthenticated, ready } = useAuth();
@@ -63,13 +67,6 @@ export default function CampaignsPage() {
 
     const MAX_TITLE = 500;
     const MAX_MESSAGE = 5000;
-    const VALID_INTERESTS = [
-      "microjobs",
-      "forex",
-      "wallets",
-      "crypto",
-      "rentals",
-    ];
 
     if (!title.trim() || !message.trim()) {
       toast("Title and message are required", "error");
@@ -87,7 +84,7 @@ export default function CampaignsPage() {
     }
 
     for (const tag of selectedTags) {
-      if (!VALID_INTERESTS.includes(tag)) {
+      if (!Object.hasOwn(INTEREST_LABELS, tag)) {
         toast(`Invalid interest: ${tag}`, "error");
         return;
       }
@@ -194,7 +191,7 @@ export default function CampaignsPage() {
               Target Interests (Optional - leave empty for all users)
             </label>
             <div className="flex flex-wrap gap-2">
-              {INTEREST_OPTIONS.map((tag) => (
+              {Object.entries(INTEREST_LABELS).map(([tag, label]) => (
                 <button
                   key={tag}
                   type="button"
@@ -205,7 +202,7 @@ export default function CampaignsPage() {
                       : "bg-slate-700 text-slate-300 hover:bg-slate-600"
                   }`}
                 >
-                  {tag}
+                  {label}
                 </button>
               ))}
             </div>

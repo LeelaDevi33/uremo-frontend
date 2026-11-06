@@ -7,10 +7,8 @@ import { withCacheBust } from "@/lib/cacheBust";
 
 // PATCH_21: Category labels for blog display
 const CATEGORY_LABELS: Record<string, string> = {
-  microjobs: "Microjobs",
-  forex_crypto: "Forex & Crypto",
-  banks_gateways_wallets: "Banks & Wallets",
-  rentals: "Account Rentals",
+  opportunities: "Project opportunities",
+  microjobs: "Work and gigs",
   guides: "Guides",
   general: "General",
 };

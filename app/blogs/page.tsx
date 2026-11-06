@@ -7,10 +7,8 @@ import { withCacheBust } from "@/lib/cacheBust";
 
 // PATCH_62: Blog category labels aligned with backend
 const CATEGORY_LABELS: Record<string, string> = {
-  microjobs: "Microjobs & Gigs",
-  forex_crypto: "Forex & Crypto",
-  banks_gateways_wallets: "Banks & Wallets",
-  rentals: "Account Rentals",
+  opportunities: "Project opportunities",
+  microjobs: "Work and gigs",
   guides: "Guides",
   general: "General",
 };

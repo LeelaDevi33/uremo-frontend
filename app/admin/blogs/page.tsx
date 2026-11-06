@@ -28,10 +28,8 @@ interface Blog {
 }
 
 const CATEGORY_OPTIONS = [
-  { value: "microjobs", label: "Microjobs" },
-  { value: "forex_crypto", label: "Forex & Crypto" },
-  { value: "banks_gateways_wallets", label: "Banks & Wallets" },
-  { value: "rentals", label: "Account Rentals" },
+  { value: "opportunities", label: "Project opportunities" },
+  { value: "microjobs", label: "Work and gigs" },
   { value: "guides", label: "Guides" },
   { value: "general", label: "General" },
 ];
@@ -436,6 +434,9 @@ export default function AdminBlogsPage() {
                       }
                       className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
                     >
+                      {!CATEGORY_OPTIONS.some((opt) => opt.value === formData.category) && (
+                        <option value={formData.category}>Archived category</option>
+                      )}
                       {CATEGORY_OPTIONS.map((opt) => (
                         <option
                           key={opt.value}
