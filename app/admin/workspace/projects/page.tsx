@@ -1006,8 +1006,8 @@ function ProjectsContent() {
       {/* Create Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-4">Create Project</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="create-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="create-project-title" className="text-xl font-bold mb-4">Create Project</h2>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="block text-sm text-slate-400 mb-1">
@@ -1211,8 +1211,8 @@ function ProjectsContent() {
       {/* Assign Modal - PATCH_86: Eligibility-aware worker selection */}
       {assignModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-2">Assign Project</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="assign-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="assign-project-title" className="text-xl font-bold mb-2">Assign Project</h2>
             <p className="text-sm text-slate-400 mb-2">
               Assign &quot;{assignModal.title}&quot; to a worker
             </p>
@@ -1370,8 +1370,8 @@ function ProjectsContent() {
       {/* PATCH_48: Credit Earnings Modal */}
       {creditModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-2">💰 Credit Earnings</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="credit-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="credit-project-title" className="text-xl font-bold mb-2">Credit Earnings</h2>
             <p className="text-sm text-slate-400 mb-4">
               Credit earnings for &quot;{creditModal.title}&quot;
             </p>
