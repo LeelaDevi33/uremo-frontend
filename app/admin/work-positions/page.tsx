@@ -114,20 +114,20 @@ export default function AdminWorkPositionsPage() {
           <legend className="px-1 font-semibold">Public role brief</legend>
           <label className="block">Public description<textarea aria-label="Public description" className={input} rows={3} maxLength={800} value={draft.description} onChange={e => update("description", e.target.value)} /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label>Experience level<select className={input} value={draft.experienceLevel} onChange={e => update("experienceLevel", e.target.value)}>
+            <label>Experience level<select aria-label="Experience level" className={input} value={draft.experienceLevel} onChange={e => update("experienceLevel", e.target.value)}>
               <option value="">Unspecified</option>
               {Object.entries(experienceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select></label>
-            <label>Work mode<select className={input} value={draft.workMode} onChange={e => update("workMode", e.target.value)}>
+            <label>Work mode<select aria-label="Work mode" className={input} value={draft.workMode} onChange={e => update("workMode", e.target.value)}>
               <option value="">Unspecified</option>
               {Object.entries(workModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select></label>
             <label>Eligible locations<input className={input} maxLength={160} value={draft.locationEligibility} onChange={e => update("locationEligibility", e.target.value)} /></label>
             <label>Time commitment<input className={input} maxLength={120} value={draft.timeCommitment} onChange={e => update("timeCommitment", e.target.value)} /></label>
           </div>
-          <label className="block">Skills<textarea aria-describedby="role-skill-hint" className={input} rows={3} value={draft.skills} onChange={e => update("skills", e.target.value)} /></label>
+          <label className="block">Skills<textarea aria-label="Skills" aria-describedby="role-skill-hint" className={input} rows={3} value={draft.skills} onChange={e => update("skills", e.target.value)} /></label>
           <p id="role-skill-hint" className="text-xs text-slate-400">Enter up to 12 skills, one per line.</p>
-          <label className="block">Responsibilities<textarea aria-describedby="role-responsibility-hint" className={input} rows={3} value={draft.responsibilities} onChange={e => update("responsibilities", e.target.value)} /></label>
+          <label className="block">Responsibilities<textarea aria-label="Responsibilities" aria-describedby="role-responsibility-hint" className={input} rows={3} value={draft.responsibilities} onChange={e => update("responsibilities", e.target.value)} /></label>
           <p id="role-responsibility-hint" className="text-xs text-slate-400">Enter up to 12 responsibilities, one per line.</p>
           <label className="block">Applicant requirements<textarea aria-label="Applicant requirements" className={input} rows={3} maxLength={1600} value={draft.requirements} onChange={e => update("requirements", e.target.value)} /></label>
         </fieldset>
