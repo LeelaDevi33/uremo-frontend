@@ -577,7 +577,7 @@ export default function UnifiedMarketplacePage() {
   const IconComponent = config.icon;
 
   return (
-    <div className="u-container py-6 px-4 md:px-6">
+    <div className="u-container pt-6 pb-28 px-4 md:px-6">
       <header className="mb-8 max-w-2xl">
         <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-2">
           Explore the marketplace
@@ -1221,11 +1221,14 @@ export default function UnifiedMarketplacePage() {
       {/* Quick Preview Modal - Enhanced Premium Design */}
       {previewService && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"
           onClick={() => setPreviewService(null)}
         >
           <div
-            className="w-full max-w-3xl rounded-3xl border border-white/20 bg-gradient-to-br from-slate-900/95 to-slate-950/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Service preview"
+            className="flex flex-col w-full max-w-3xl max-h-[calc(100dvh-2rem)] rounded-3xl border border-white/20 bg-gradient-to-br from-slate-900/95 to-slate-950/95 backdrop-blur-2xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header with Image */}
