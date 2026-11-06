@@ -174,11 +174,9 @@ const IconSparkle = () => (
 );
 
 const INTEREST_OPTIONS = [
-  { id: "microjobs", label: "Micro Jobs", icon: "Work" },
-  { id: "forex", label: "Forex Trading", icon: "FX" },
-  { id: "wallets", label: "Digital Wallets", icon: "Pay" },
-  { id: "crypto", label: "Cryptocurrency", icon: "₿" },
-  { id: "rentals", label: "Rentals", icon: "Rent" },
+  { id: "microjobs", label: "Open roles", icon: "Work" },
+  { id: "rentals", label: "Project rentals", icon: "Rent" },
+  { id: "project_purchase", label: "Exclusive projects", icon: "Buy" },
 ];
 
 export default function ProfilePage() {

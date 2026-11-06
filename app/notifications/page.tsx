@@ -126,7 +126,7 @@ export default function NotificationsPage() {
         order: `/orders/${notification.resourceId}`,
         ticket: `/support/tickets/${notification.resourceId}`,
         rental: `/rentals`,
-        withdrawal: `/affiliate/withdrawals`,
+        withdrawal: `/finance/withdrawals`,
       };
       const route = routes[notification.resourceType];
       if (route) router.push(route);

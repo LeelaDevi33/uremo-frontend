@@ -133,6 +133,8 @@ function ApplicationForm({ query }: { query: string }) {
   const [showForm, setShowForm] = useState(false);
 
   const [message, setMessage] = useState("");
+  const [resumeUrl, setResumeUrl] = useState("");
+  const [resumeMode, setResumeMode] = useState<"file" | "link">("file");
   const [resume, setResume] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [existing, setExisting] = useState<Application | null>(null);
@@ -172,7 +174,11 @@ function ApplicationForm({ query }: { query: string }) {
 
   const checkExisting = async () => {
     try {
-      const app = await apiRequest("/api/apply-work/me", "GET", null, true);
+      const requested = params.get("positionId") || params.get("jobId");
+      const path = requested && /^[a-f0-9]{24}$/i.test(requested)
+        ? "/api/apply-work/me?positionId=" + encodeURIComponent(requested)
+        : "/api/apply-work/me";
+      const app = await apiRequest<Application | null>(path, "GET", null, true);
       if (app) {
         setExisting(app);
       }
@@ -219,7 +225,7 @@ function ApplicationForm({ query }: { query: string }) {
       return;
     }
 
-    if (!resume) {
+    if (resumeMode === "file" && !resume) {
       toast(ui.resumeRequiredText, "error");
       return;
     }
@@ -227,7 +233,17 @@ function ApplicationForm({ query }: { query: string }) {
     const formData = new FormData();
     formData.append("positionId", selectedPosition._id);
     formData.append("message", message);
-    formData.append("resume", resume);
+    if (resumeMode === "link") {
+      let url: URL;
+      try { url = new URL(resumeUrl.trim()); }
+      catch { toast("Enter a full HTTPS resume link.", "error"); return; }
+      if (url.protocol !== "https:" || url.username || url.password) {
+        toast("Use an HTTPS resume link without embedded credentials.", "error"); return;
+      }
+      formData.append("resumeUrl", url.href);
+    } else if (resume) {
+      formData.append("resume", resume);
+    }
 
     try {
       setLoading(true);
@@ -473,7 +489,7 @@ function ApplicationForm({ query }: { query: string }) {
               href="/explore-services"
               className="inline-block mt-6 text-emerald-400 hover:text-emerald-300 font-medium transition"
             >
-              Browse Services Instead →
+              Explore opportunities →
             </a>
           </div>
         ) : (
@@ -673,42 +689,32 @@ function ApplicationForm({ query }: { query: string }) {
                           <label className="text-sm text-slate-400 block mb-2">
                             {ui.resumeLabel}
                           </label>
-                          <div
-                            className="rounded-xl border-2 border-dashed border-white/20 bg-white/5 p-6 text-center hover:border-emerald-500/50 transition cursor-pointer"
-                            onClick={() =>
-                              document.getElementById("resume-upload")?.click()
-                            }
-                          >
-                            <input
-                              id="resume-upload"
-                              type="file"
-                              accept=".pdf,.doc,.docx"
-                              onChange={(e) =>
-                                setResume(e.target.files?.[0] || null)
-                              }
-                              className="hidden"
-                            />
-                            {resume ? (
-                              <div className="flex items-center justify-center gap-2 text-emerald-400">
-                                <CheckCircleIcon className="w-5 h-5" />
-                                <span className="font-medium">
-                                  {resume.name}
-                                </span>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="w-12 h-12 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center mx-auto mb-3">
-                                  <ClipboardIcon className="w-6 h-6 text-slate-400" />
-                                </div>
-                                <p className="text-slate-300 font-medium">
-                                  Click to upload resume
-                                </p>
-                                <p className="text-xs text-slate-500 mt-1">
-                                  {ui.resumeHelperText}
-                                </p>
-                              </>
-                            )}
+                          <div className="mb-3 flex gap-3">
+                            <button type="button" aria-pressed={resumeMode === "file"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("file")}>Upload a file</button>
+                            <button type="button" aria-pressed={resumeMode === "link"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("link")}>Use a resume link</button>
                           </div>
+                          {resumeMode === "link" ? <label className="block text-sm">Resume link (HTTPS)
+                            <input type="url" className="mt-2 w-full rounded-lg border border-white/20 bg-slate-900 p-3" value={resumeUrl} onChange={e => setResumeUrl(e.target.value)} />
+                          </label> : (
+                            <label className="block rounded-xl border border-dashed border-white/25 bg-white/5 p-4 text-sm">
+                              Resume file (PDF, JPG, PNG or WebP, up to 10 MB)
+                              <input
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                className="mt-3 block w-full text-slate-300"
+                                onChange={event => {
+                                  const file = event.currentTarget.files?.[0] ?? null;
+                                  if (file && file.size > 10 * 1024 * 1024) {
+                                    event.currentTarget.value = "";
+                                    setResume(null);
+                                    toast("Choose a file of 10 MB or less.", "error");
+                                  } else {
+                                    setResume(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                          )}
                         </div>
 
                         {/* Submit Button */}

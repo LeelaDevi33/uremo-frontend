@@ -6,7 +6,6 @@ import "./globals.css";
 import { ToastProvider } from "@/hooks/useToast";
 import ToastViewport from "@/components/ToastViewport";
 import Navbar from "@/components/Navbar";
-import JarvisWidget from "@/components/jarvisx/JarvisWidget";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -17,7 +16,7 @@ export const metadata: Metadata = {
     default: "UREMO",
     template: "%s | UREMO",
   },
-  description: "UREMO platform",
+  description: "Browse project opportunities, apply to open roles and manage your project access.",
   icons: {
     icon: FAVICON_PATH,
     shortcut: FAVICON_PATH,
@@ -34,7 +33,6 @@ export default function RootLayout({
         <ToastProvider>
           <Navbar />
           <main className="pt-14">{children}</main>
-          <JarvisWidget />
           <ToastViewport />
         </ToastProvider>
       </body>

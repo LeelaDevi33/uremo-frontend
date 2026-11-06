@@ -65,6 +65,7 @@ export default function Navbar() {
       label: "Marketplace",
       emoji: <EmojiMarketplace />,
     },
+    { href: "/opportunities/access", label: "My access", emoji: <EmojiServices /> },
     { href: "/workspace", label: "Work", emoji: <EmojiWork /> },
     { href: "/wallet", label: "Wallet", emoji: <EmojiWallet /> },
     { href: "/orders", label: "Orders", emoji: <EmojiOrders /> },
@@ -74,7 +75,7 @@ export default function Navbar() {
   // PATCH_102: Simplified admin links for mobile drawer (full nav is in CommandRail)
   const adminLinks = [
     { href: "/admin", label: "Dashboard", emoji: <EmojiDashboard /> },
-    { href: "/admin/services", label: "Services", emoji: <EmojiServices /> },
+    { href: "/admin/opportunities", label: "Opportunities", emoji: <EmojiServices /> },
     { href: "/admin/orders", label: "Orders", emoji: <EmojiOrders /> },
     {
       href: "/admin/workspace/master",
@@ -109,6 +110,8 @@ export default function Navbar() {
                   onClick={() => setMobileMenuOpen(true)}
                   className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all"
                   aria-label="Open menu"
+                  aria-controls="mobile-menu"
+                  aria-expanded={mobileMenuOpen}
                 >
                   <svg
                     className="w-5 h-5"
@@ -198,7 +201,7 @@ export default function Navbar() {
                     href="/explore-services"
                     className="btn-secondary hidden sm:inline-flex"
                   >
-                    {nav.guestSecondaryCtaText}
+                    Explore opportunities
                   </Link>
                 </>
               )}
@@ -277,6 +280,9 @@ export default function Navbar() {
 
           {/* Drawer */}
           <div
+            id="mobile-menu"
+            inert={!mobileMenuOpen}
+            aria-hidden={!mobileMenuOpen}
             className={`fixed inset-y-0 left-0 z-[10001] w-80 max-w-[85vw] bg-slate-900 border-r border-white/10 shadow-2xl transform transition-transform duration-300 lg:hidden ${
               mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             }`}

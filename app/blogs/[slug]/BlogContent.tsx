@@ -265,7 +265,7 @@ export default function BlogContent({ slug }: BlogContentProps) {
             href="/buy-service"
             className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
           >
-            Browse Services
+            Explore opportunities
             <svg
               className="w-5 h-5"
               fill="none"

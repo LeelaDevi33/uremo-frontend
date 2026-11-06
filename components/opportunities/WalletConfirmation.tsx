@@ -23,8 +23,10 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
   const [message, setMessage] = useState("");
   const [uncertain, setUncertain] = useState(false);
   const [stale, setStale] = useState(false);
-  const { state, reload } = useOpportunityData<{ balance: number }>("/api/wallet/balance", token);
-  const balance = state.phase === "loaded" && Number.isFinite(state.data.balance) ? state.data.balance : null;
+  const { state, reload } = useOpportunityData<{ balance: number; spendable?: number; pendingWithdrawals?: number }>("/api/wallet/balance", token);
+  const wallet = state.phase === "loaded" ? state.data : null;
+  const available = wallet?.spendable ?? (wallet ? wallet.balance - (wallet.pendingWithdrawals ?? 0) : NaN);
+  const balance = Number.isFinite(available) ? Math.max(0, available) : null;
   useEffect(() => { heading.current?.focus(); }, []);
 
   function forgetRequest() {

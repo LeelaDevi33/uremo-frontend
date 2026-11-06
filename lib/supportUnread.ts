@@ -10,7 +10,8 @@ type UnreadState = {
 const STORAGE_KEY = "uremo_admin_support_unread_v1";
 
 let initialized = false;
-let state: UnreadState = { total: 0, byOrder: {} };
+const emptySnapshot: UnreadState = { total: 0, byOrder: {} };
+let state: UnreadState = emptySnapshot;
 const listeners = new Set<() => void>();
 
 function emitChange() {
@@ -87,7 +88,7 @@ export function useAdminSupportUnread() {
   return useSyncExternalStore(
     subscribeAdminSupportUnread,
     getAdminSupportUnreadSnapshot,
-    () => ({ total: 0, byOrder: {} })
+    () => emptySnapshot
   );
 }
 

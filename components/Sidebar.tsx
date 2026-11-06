@@ -10,7 +10,6 @@ import { apiRequest } from "@/lib/api";
 import {
   EmojiMarketplace,
   EmojiWorkspace,
-  EmojiDeals,
   EmojiOrders,
   EmojiWallet,
   EmojiAffiliate,
@@ -161,7 +160,7 @@ export default function Sidebar() {
   // PATCH_52 + PATCH_53: Simplified user navigation with badge support
   const links = [
     {
-      name: "Find Work & Services",
+      name: "Opportunities",
       href: "/explore-services",
       badge: 0,
       emoji: <EmojiMarketplace />,
@@ -172,7 +171,7 @@ export default function Sidebar() {
       badge: 0,
       emoji: <EmojiWorkspace />,
     },
-    { name: "Deals", href: "/deals", badge: 0, emoji: <EmojiDeals /> },
+    { name: "My project access", href: "/opportunities/access", badge: 0, emoji: <EmojiRentals /> },
     { name: "Orders", href: "/orders", badge: 0, emoji: <EmojiOrders /> },
     { name: "Wallet", href: "/wallet", badge: 0, emoji: <EmojiWallet /> },
     {

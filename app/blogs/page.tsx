@@ -73,8 +73,7 @@ export default function BlogsPage() {
             UREMO Blog
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Insights, guides, and updates about microjobs, KYC, forex, crypto,
-            and earning opportunities.
+            Guides and updates from the UREMO team.
           </p>
         </div>
 
