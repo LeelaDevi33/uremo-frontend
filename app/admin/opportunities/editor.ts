@@ -14,6 +14,7 @@ export type Opportunity = {
   status: ListingStatus;
   availability: "available" | "rented" | "sold";
   firstPublishedAt: string | null;
+  closedForRefundReviewAt?: string | null;
   applyEnabled: boolean;
   rentEnabled: boolean;
   rentPrice: number;

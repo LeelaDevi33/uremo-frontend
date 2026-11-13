@@ -418,7 +418,7 @@ export default function AdminOpportunitiesPage() {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="min-w-0">
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-cyan-300">
-                        {row.availability === "sold"
+                        {row.status === "archived" && row.closedForRefundReviewAt ? "Refunded · closed for review" : row.availability === "sold"
                           ? row.status === "archived" ? "Sold · archived" : "Sold · closed"
                           : row.availability === "rented"
                             ? row.status + " · rented"
@@ -461,7 +461,11 @@ export default function AdminOpportunitiesPage() {
         </>
       ) : (
         <form onSubmit={save} noValidate>
-          {sold && (
+          {existing?.status === "archived" && existing.closedForRefundReviewAt ? (
+            <p role="status" className="mb-4 text-sm text-amber-200">
+              A wallet refund was issued. This listing is closed for review.
+            </p>
+          ) : sold && (
             <p role="status" className="mb-4 text-sm text-amber-200">
               Exclusive ownership has transferred. {existing?.status === "archived" ? "This listing has been archived." : "You can archive this listing."}
             </p>

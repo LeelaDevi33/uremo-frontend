@@ -38,7 +38,7 @@ function GrantCard({ grant, token, initialOpen }: { grant: AccessGrant; token: s
     <dl className={styles.receipt}>
       <div><dt>Paid</dt><dd>{formatPrice(grant.amount, grant.currency)}</dd></div>
       <div><dt>{rented ? "Starts" : "Purchased"}</dt><dd>{grantDate(grant.startsAt)}</dd></div>
-      <div><dt>{rented ? "Ends" : "Access term"}</dt><dd>{rented ? grantDate(grant.endsAt) : "Permanent"}</dd></div>
+      {!grant.refundedAt && <div><dt>{rented ? "Ends" : "Access term"}</dt><dd>{rented ? grantDate(grant.endsAt) : "Permanent"}</dd></div>}
       {grant.refundedAt && <div><dt>Access revoked</dt><dd>{grantDate(grant.refundedAt)}</dd></div>}
     </dl>
     <div className={styles.buttonRow}>
