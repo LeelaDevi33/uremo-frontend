@@ -981,10 +981,10 @@ function ProjectsContent() {
             <h2 id="create-project-title" className="text-xl font-bold mb-4">Create Project</h2>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-title" className="block text-sm text-slate-400 mb-1">
                   Title
                 </label>
-                <input
+                <input id="project-create-title"
                   type="text"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -993,10 +993,10 @@ function ProjectsContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-description" className="block text-sm text-slate-400 mb-1">
                   Description
                 </label>
-                <textarea
+                <textarea id="project-create-description"
                   value={form.description}
                   onChange={(e) =>
                     setForm({ ...form, description: e.target.value })
@@ -1007,10 +1007,10 @@ function ProjectsContent() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-category" className="block text-sm text-slate-400 mb-1">
                     Category
                   </label>
-                  <select
+                  <select id="project-create-category"
                     disabled={Boolean(form.workPositionId)}
                     value={form.category}
                     onChange={(e) =>
@@ -1024,10 +1024,10 @@ function ProjectsContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-priority" className="block text-sm text-slate-400 mb-1">
                     Priority
                   </label>
-                  <select
+                  <select id="project-create-priority"
                     value={form.priority}
                     onChange={(e) =>
                       setForm({ ...form, priority: e.target.value })
@@ -1044,10 +1044,10 @@ function ProjectsContent() {
 
               {/* PATCH_86: Job Role Selection - PRIMARY LINK */}
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-role" className="block text-sm text-slate-400 mb-1">
                   Job Role <span className="text-amber-400">*</span>
                 </label>
-                <select
+                <select id="project-create-role"
                   value={form.workPositionId}
                   onChange={(e) => {
                     const selectedRole = jobRoles.find(
@@ -1107,10 +1107,10 @@ function ProjectsContent() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-instructions" className="block text-sm text-slate-400 mb-1">
                   Instructions
                 </label>
-                <textarea
+                <textarea id="project-create-instructions"
                   value={form.instructions}
                   onChange={(e) =>
                     setForm({ ...form, instructions: e.target.value })
@@ -1122,10 +1122,10 @@ function ProjectsContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-payout" className="block text-sm text-slate-400 mb-1">
                     Payout ($)
                   </label>
-                  <input
+                  <input id="project-create-payout"
                     type="number"
                     step="0.01"
                     min="0"
@@ -1137,10 +1137,10 @@ function ProjectsContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-deadline" className="block text-sm text-slate-400 mb-1">
                     Deadline
                   </label>
-                  <input
+                  <input id="project-create-deadline"
                     type="date"
                     value={form.deadline}
                     onChange={(e) =>
@@ -1349,10 +1349,10 @@ function ProjectsContent() {
             </p>
 
             <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-1">
+              <label htmlFor="project-edit-amount" className="block text-sm text-slate-400 mb-1">
                 Amount ($)
               </label>
-              <input
+              <input id="project-edit-amount"
                 type="number"
                 step="0.01"
                 min="0"
@@ -1428,7 +1428,7 @@ function ProjectsContent() {
                   setViewModal(null);
                   setViewData(null);
                 }}
-                className="text-slate-400 hover:text-white text-2xl"
+                aria-label="Close project details" className="text-slate-400 hover:text-white text-2xl"
               >
                 ×
               </button>
@@ -1602,6 +1602,7 @@ function ProjectsContent() {
               <h2 className="text-xl font-semibold text-white">Edit Project</h2>
               <button
                 onClick={() => setEditModal(null)}
+                aria-label="Close project editor"
                 className="text-slate-400 hover:text-white text-2xl"
               >
                 ×
@@ -1616,10 +1617,10 @@ function ProjectsContent() {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-title" className="block text-sm text-slate-400 mb-1">
                   Title *
                 </label>
-                <input
+                <input id="project-edit-title"
                   type="text"
                   value={editForm.title}
                   onChange={(e) =>
@@ -1631,10 +1632,10 @@ function ProjectsContent() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-description" className="block text-sm text-slate-400 mb-1">
                   Description
                 </label>
-                <textarea
+                <textarea id="project-edit-description"
                   value={editForm.description}
                   onChange={(e) =>
                     setEditForm({ ...editForm, description: e.target.value })
@@ -1646,10 +1647,10 @@ function ProjectsContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-category" className="block text-sm text-slate-400 mb-1">
                     Category
                   </label>
-                  <select
+                  <select id="project-edit-category"
                     disabled={Boolean(editModal.workPositionId)}
                     value={editForm.category}
                     onChange={(e) =>
@@ -1663,11 +1664,11 @@ function ProjectsContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-status" className="block text-sm text-slate-400 mb-1">
                     Status
                   </label>
                   {/* PATCH_73: Removed 'completed' - completion must occur via proof approval */}
-                  <select
+                  <select id="project-edit-status"
                     disabled={editModal.marketplaceReserved}
                     value={editForm.status}
                     onChange={(e) =>
@@ -1684,10 +1685,10 @@ function ProjectsContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-worker-pay-rate-usd" className="block text-sm text-slate-400 mb-1">
                     Worker pay rate (USD)
                   </label>
-                  <input
+                  <input id="project-edit-worker-pay-rate-usd"
                     type="number"
                     step="0.01"
                     min="0"
@@ -1702,10 +1703,10 @@ function ProjectsContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-pay-type" className="block text-sm text-slate-400 mb-1">
                     Pay Type
                   </label>
-                  <select
+                  <select id="project-edit-pay-type"
                     value={editForm.payType}
                     onChange={(e) =>
                       setEditForm({ ...editForm, payType: e.target.value })
@@ -1776,10 +1777,10 @@ function ProjectsContent() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-instructions" className="block text-sm text-slate-400 mb-1">
                   Instructions
                 </label>
-                <textarea
+                <textarea id="project-edit-instructions"
                   value={editForm.instructions}
                   onChange={(e) =>
                     setEditForm({ ...editForm, instructions: e.target.value })
@@ -1798,10 +1799,10 @@ function ProjectsContent() {
               <ProjectDeliveryFields fields={editForm} datasets={datasetOptions} onChange={change => setEditForm({ ...editForm, ...change })} />
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-deadline" className="block text-sm text-slate-400 mb-1">
                   Deadline
                 </label>
-                <input
+                <input id="project-edit-deadline"
                   type="date"
                   value={editForm.deadline}
                   onChange={(e) =>
