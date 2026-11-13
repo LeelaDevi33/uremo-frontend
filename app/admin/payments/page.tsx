@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import FundingMethods from "./FundingMethods";
 
 type Method = { _id: string; name?: string; label?: string; type: string; active: boolean };
 
@@ -35,6 +36,7 @@ export default function AdminPaymentsPage() {
       <Link className="underline" href="/admin/wallet">Wallet and manual top-ups</Link>
       <Link className="underline" href="/admin/orders">Historical orders</Link>
     </div>
+    <FundingMethods />
     <section className="rounded-xl border border-slate-700 p-5">
       <h2 className="text-lg font-semibold">Historical payment methods</h2>
       <p className="mt-1 text-sm text-slate-400">These methods belong to earlier orders. Project rentals and purchases use wallet funds.</p>

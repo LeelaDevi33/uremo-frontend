@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
@@ -32,6 +32,8 @@ interface Transaction {
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
   settlementReference?: string;
+  methodName?: string;
+  paymentReference?: string;
   failureReason?: string;
   user?: { _id: string; name: string; email: string };
 }
@@ -44,7 +46,7 @@ interface Stats {
 
 interface WithdrawalRequest {
   _id: string;
-  userId: { _id: string; name: string; email: string };
+  userId: { _id: string; name: string; email: string } | null;
   amount: number;
   method: string;
   note?: string;
@@ -90,6 +92,11 @@ export default function AdminWalletPage() {
 
   // PATCH_80: Pending topups
   const [pendingTopups, setPendingTopups] = useState<Transaction[]>([]);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPages, setPendingPages] = useState(1);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingError, setPendingError] = useState("");
+  const pendingRequest = useRef(0);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [settlementReferences, setSettlementReferences] = useState<Record<string, string>>({});
@@ -97,6 +104,11 @@ export default function AdminWalletPage() {
   // PATCH_115: Withdrawal requests
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [withdrawalLoading, setWithdrawalLoading] = useState(false);
+  const [withdrawalCursors, setWithdrawalCursors] = useState<string[]>([]);
+  const [nextWithdrawalCursor, setNextWithdrawalCursor] = useState<string | null>(null);
+  const [withdrawalError, setWithdrawalError] = useState(false);
+  const [withdrawalReload, setWithdrawalReload] = useState(0);
+  const withdrawalBefore = withdrawalCursors.at(-1);
   const [withdrawalFilter, setWithdrawalFilter] = useState<
     "all" | "pending" | "approved" | "rejected" | "paid"
   >("pending");
@@ -109,16 +121,27 @@ export default function AdminWalletPage() {
       return;
     }
     fetchStats();
-    fetchPendingTopups(); // PATCH_80: Fetch pending topups on load
-    fetchWithdrawals(); // PATCH_115: Fetch withdrawal requests on load
   }, [ready, isAdmin, router]);
 
-  // PATCH_115: Re-fetch withdrawals when filter changes
   useEffect(() => {
-    if (ready && isAdmin && withdrawalFilter) {
-      fetchWithdrawals();
-    }
-  }, [withdrawalFilter]);
+    if (!ready || !isAdmin) return;
+    let current = true;
+    const query = new URLSearchParams();
+    if (withdrawalFilter !== "all") query.set("status", withdrawalFilter);
+    if (withdrawalBefore) query.set("before", withdrawalBefore);
+    setWithdrawalLoading(true);
+    setWithdrawalError(false);
+    setNextWithdrawalCursor(null);
+    apiRequest("/api/admin/wallet/withdrawals?" + query, "GET")
+      .then(result => {
+        if (!current) return;
+        setWithdrawals(result.withdrawals);
+        setNextWithdrawalCursor(result.nextCursor ?? null);
+      })
+      .catch(() => { if (current) { setWithdrawals([]); setWithdrawalError(true); } })
+      .finally(() => { if (current) setWithdrawalLoading(false); });
+    return () => { current = false; };
+  }, [ready, isAdmin, withdrawalFilter, withdrawalBefore, withdrawalReload]);
 
   const fetchStats = async () => {
     try {
@@ -133,35 +156,28 @@ export default function AdminWalletPage() {
 
   // PATCH_80: Fetch pending topups
   const fetchPendingTopups = async () => {
+    const request = ++pendingRequest.current;
     setPendingLoading(true);
     try {
-      const res = await apiRequest("/api/admin/wallet/pending-topups", "GET");
+      const res = await apiRequest("/api/admin/wallet/pending-topups?page=" + pendingPage, "GET");
+      if (request !== pendingRequest.current) return;
+      const pages = Math.max(1, res.pages);
+      setPendingPages(pages);
+      setPendingTotal(res.total);
+      setPendingError("");
       setPendingTopups(res.pendingTopups || []);
-    } catch (err: any) {
-      console.error("Failed to fetch pending topups:", err);
+      if (pendingPage > pages) setPendingPage(pages);
+    } catch (cause) {
+      if (request === pendingRequest.current) setPendingError(cause instanceof Error ? cause.message : "Could not load pending transfers.");
     } finally {
-      setPendingLoading(false);
+      if (request === pendingRequest.current) setPendingLoading(false);
     }
   };
+  useEffect(() => {
+    if (ready && isAdmin) void fetchPendingTopups();
+  }, [ready, isAdmin, pendingPage]);
 
-  // PATCH_115: Fetch withdrawal requests
-  const fetchWithdrawals = async () => {
-    setWithdrawalLoading(true);
-    try {
-      const filter =
-        withdrawalFilter !== "all" ? `?status=${withdrawalFilter}` : "";
-      const res = await apiRequest(
-        `/api/admin/wallet/withdrawals${filter}`,
-        "GET",
-      );
-      setWithdrawals(res.withdrawals || []);
-    } catch (err: any) {
-      console.error("Failed to fetch withdrawals:", err);
-      toast("Failed to load withdrawals", "error");
-    } finally {
-      setWithdrawalLoading(false);
-    }
-  };
+  const fetchWithdrawals = () => setWithdrawalReload(value => value + 1);
 
   // PATCH_80: Verify (approve/reject) a pending topup
   // PATCH_81: Enhanced with double-click protection and already-processed handling
@@ -189,7 +205,7 @@ export default function AdminWalletPage() {
       fetchStats(); // Refresh stats
     } catch (err: any) {
       // PATCH_81: Handle already-processed case gracefully
-      if (err.alreadyProcessed) {
+      if (err.payload?.alreadyProcessed) {
         toast("This topup was already processed by another admin", "info");
         fetchPendingTopups(); // Remove from list
       } else {
@@ -440,7 +456,7 @@ export default function AdminWalletPage() {
         )}
 
         {/* PATCH_80: Pending Topups Section */}
-        {pendingTopups.length > 0 && (
+        {(
           <div className="bg-slate-900 rounded-xl border border-amber-500/50 mb-8">
             <div className="p-4 border-b border-amber-500/30 bg-amber-500/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -450,13 +466,13 @@ export default function AdminWalletPage() {
                 </h2>
               </div>
               <span className="bg-amber-500 text-black text-xs font-bold px-2 py-1 rounded-full">
-                {pendingTopups.length} Pending
+                {pendingError ? "Unavailable" : pendingTotal + " Pending"}
               </span>
             </div>
             <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
-              {pendingLoading ? (
+              {pendingError ? <p role="alert">{pendingError} <button className="underline" onClick={fetchPendingTopups}>Reload transfers</button></p> : pendingLoading ? (
                 <p className="text-slate-400 text-center py-4">Loading...</p>
-              ) : (
+              ) : pendingTopups.length === 0 ? <p className="text-slate-400">No transfers awaiting review.</p> : (
                 pendingTopups.map((topup) => (
                   <div
                     key={topup._id}
@@ -502,6 +518,8 @@ export default function AdminWalletPage() {
                         </span>
                       </div>
                     </div>
+                    {topup.methodName && <p className="mt-2 text-sm text-slate-200">Funding method: {topup.methodName}</p>}
+                    {topup.paymentReference && <p className="mt-1 break-all text-sm text-slate-300">Submitted transfer reference: {topup.paymentReference}</p>}
                     {(!topup.provider || ["manual", "internal"].includes(topup.provider)) && (
                       <label className="mt-3 block text-sm text-slate-300">
                         Verified payment reference
@@ -522,8 +540,8 @@ export default function AdminWalletPage() {
                       </button>
                       <button
                         onClick={() => handleVerifyTopup(topup._id, "approve")}
-                        disabled={verifyingId === topup._id || ((!topup.provider || ["manual", "internal"].includes(topup.provider)) &&
-                          !/^[a-z0-9][a-z0-9._/-]{3,79}$/i.test(settlementReferences[topup._id]?.trim() || ""))}
+                        disabled={Boolean(verifyingId) || !/^[a-z0-9][a-z0-9._/-]{3,79}$/i.test(settlementReferences[topup._id]?.trim() || "") ||
+                          Boolean(topup.paymentReference && topup.paymentReference !== settlementReferences[topup._id]?.trim().toUpperCase())}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                       >
                         {verifyingId === topup._id ? "..." : "✓ Approve"}
@@ -533,6 +551,11 @@ export default function AdminWalletPage() {
                 ))
               )}
             </div>
+            {pendingPages > 1 && <nav aria-label="Pending transfer pages" className="flex items-center justify-between p-4">
+              <button disabled={pendingLoading || pendingPage <= 1} className="underline disabled:opacity-40" onClick={() => setPendingPage(page => page - 1)}>Previous transfers</button>
+              <span>Page {pendingPage} of {pendingPages}</span>
+              <button disabled={pendingLoading || pendingPage >= pendingPages} className="underline disabled:opacity-40" onClick={() => setPendingPage(page => page + 1)}>Next transfers</button>
+            </nav>}
           </div>
         )}
 
@@ -548,7 +571,7 @@ export default function AdminWalletPage() {
             <div className="flex items-center gap-2">
               <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
                 {withdrawals.filter((w) => w.status === "pending").length}{" "}
-                Pending
+                Pending on this page
               </span>
             </div>
           </div>
@@ -561,7 +584,7 @@ export default function AdminWalletPage() {
                   key={status}
                   onClick={() => {
                     setWithdrawalFilter(status);
-                    setWithdrawalLoading(true);
+                    setWithdrawalCursors([]);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
                     withdrawalFilter === status
@@ -589,6 +612,8 @@ export default function AdminWalletPage() {
                   </div>
                 ))}
               </div>
+            ) : withdrawalError ? (
+              <p role="alert">Withdrawals could not be loaded. <button className="underline" onClick={fetchWithdrawals}>Retry</button></p>
             ) : withdrawals.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-slate-400 text-sm">
@@ -606,10 +631,10 @@ export default function AdminWalletPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-medium text-white">
-                          {withdrawal.userId.name}
+                          {withdrawal.userId?.name ?? "Archived account"}
                         </p>
                         <p className="text-sm text-slate-400">
-                          {withdrawal.userId.email}
+                          {withdrawal.userId?.email}
                         </p>
                       </div>
                       <div className="text-right">
@@ -704,6 +729,11 @@ export default function AdminWalletPage() {
           </div>
         </div>
 
+        {(withdrawalCursors.length > 0 || nextWithdrawalCursor) && <nav aria-label="Withdrawal pages" className="mb-6 flex items-center gap-4">
+          <button className="underline disabled:opacity-50" disabled={!withdrawalCursors.length || withdrawalLoading} onClick={() => setWithdrawalCursors(values => values.slice(0, -1))}>Newer withdrawals</button>
+          <span>Page {withdrawalCursors.length + 1}</span>
+          <button className="underline disabled:opacity-50" disabled={!nextWithdrawalCursor || withdrawalLoading} onClick={() => { if (nextWithdrawalCursor) setWithdrawalCursors(values => [...values, nextWithdrawalCursor]); }}>Older withdrawals</button>
+        </nav>}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Search Panel */}
           <div className="bg-slate-900 rounded-xl border border-slate-800">
@@ -848,6 +878,8 @@ export default function AdminWalletPage() {
                           <p className="text-sm font-medium">
                             {getSourceLabel(tx.source)}
                           </p>
+                          {tx.methodName && <p className="text-xs text-slate-300">Funding method: {tx.methodName}</p>}
+                          {tx.paymentReference && <p className="break-all text-xs text-slate-300">Submitted transfer reference: {tx.paymentReference}</p>}
                           {tx.settlementReference && <p className="break-all text-xs text-slate-300">Payment reference: {tx.settlementReference}</p>}
                           <p className="text-xs text-slate-500">
                             {new Date(tx.createdAt).toLocaleString()}

@@ -123,7 +123,8 @@ export async function apiRequest<T = any>(
   const extractMessage = (value: unknown): string | null => {
     if (!value || typeof value !== "object") return null;
     const record = value as Record<string, unknown>;
-    return typeof record.message === "string" ? record.message : null;
+    if (typeof record.message === "string") return record.message;
+    return typeof record.error === "string" ? record.error : null;
   };
 
   if (!res.ok) {
