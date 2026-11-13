@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { apiRequest } from "@/lib/api";
+import { approveWorkerProof } from "../reviewProof";
 import { useToast } from "@/hooks/useToast";
 import { workerIdentity } from "./workerIdentity";
 import {
@@ -222,6 +223,7 @@ export default function Worker360Page() {
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Data states
@@ -229,20 +231,15 @@ export default function Worker360Page() {
   const [projects, setProjects] = useState<ProjectData[]>([]);
   const [proofs, setProofs] = useState<ProofData[]>([]);
   const [activities, setActivities] = useState<ActivityEvent[]>([]);
-  const [availableProjects, setAvailableProjects] = useState<ProjectData[]>([]);
 
   // Modal states
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   // PATCH_66: Suspend modal with reason and end date
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [suspendReason, setSuspendReason] = useState("");
   const [suspendEndDate, setSuspendEndDate] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    null,
-  );
   const [newStatus, setNewStatus] = useState("");
   const [adminNotes, setAdminNotes] = useState("");
   const [creditAmount, setCreditAmount] = useState(0);
@@ -292,30 +289,20 @@ export default function Worker360Page() {
     if (!workerId) return;
 
     setLoading(true);
+    setLoadError("");
     try {
-      // Fetch all workers and find the specific one
-      const workersRes = await apiRequest<any>(
-        `/api/admin/workspace/workers?limit=500`,
-        "GET",
-        null,
-        true,
+      const { worker: workerData } = await apiRequest(
+        `/api/admin/workspace/worker/${encodeURIComponent(workerId)}`, "GET", null, true,
       );
-
-      const allWorkers = workersRes.workers || [];
-      const workerData = allWorkers.find(
-        (w: any) => w._id === workerId || w.user?._id === workerId,
-      );
-
-      if (!workerData) {
-        toast("Worker not found", "error");
-        router.push("/admin/workforce");
-        return;
-      }
+      const account = workerIdentity(workerData.user, workerData.userId);
+      const assignedProjects: ProjectData[] = account._id ? workerData.projects || [] : [];
+      const currentProjectId = typeof workerData.currentProject === "string"
+        ? workerData.currentProject : workerData.currentProject?._id;
 
       // Normalize the worker data
       const normalizedWorker: WorkerDetail = {
         _id: workerData._id,
-        user: workerIdentity(workerData.user, workerData.userId),
+        user: account,
         position: workerData.position,
         positionTitle:
           workerData.positionTitle ||
@@ -332,7 +319,7 @@ export default function Worker360Page() {
         screeningsCompleted: workerData.screeningsCompleted || [],
         testsCompleted: workerData.testsCompleted || [],
         projectsCompleted: workerData.projectsCompleted || [],
-        currentProject: workerData.currentProject,
+        currentProject: assignedProjects.find(project => project._id === currentProjectId),
         adminNotes: workerData.adminNotes || "",
         trainingViewedAt: workerData.trainingViewedAt,
         approvedBy: workerData.approvedBy,
@@ -346,47 +333,26 @@ export default function Worker360Page() {
       setWorker(normalizedWorker);
       setAdminNotes(normalizedWorker.adminNotes || "");
 
-      // Fetch projects assigned to this worker's user
+      setProjects(assignedProjects);
       if (normalizedWorker.user._id) {
-        const projectsRes = await apiRequest<any>(
-          `/api/admin/workspace/projects?limit=100`,
-          "GET",
-          null,
-          true,
-        );
-        const workerProjects = (projectsRes.projects || []).filter(
-          (p: any) =>
-            p.assignedTo?._id === normalizedWorker.user._id ||
-            p.assignedTo === normalizedWorker.user._id,
-        );
-        setProjects(workerProjects);
-
-        // Fetch proofs for this worker
-        const proofsRes = await apiRequest<any>(
-          `/api/admin/proofs?limit=100`,
-          "GET",
-          null,
-          true,
-        );
-        const workerProofs = (proofsRes.proofs || []).filter(
-          (p: any) =>
-            p.workerId?._id === normalizedWorker.user._id ||
-            p.workerId === normalizedWorker.user._id,
-        );
-        setProofs(workerProofs);
-
-        // Available projects for assignment
-        const availableRes = await apiRequest<any>(
-          `/api/admin/workspace/projects?status=pending`,
-          "GET",
-          null,
-          true,
-        );
-        setAvailableProjects(
-          (availableRes.projects || []).filter(
-            (p: any) => !p.assignedTo && p.status === "pending",
-          ),
-        );
+        const account = encodeURIComponent(normalizedWorker.user._id);
+        const allProofs: ProofData[] = [];
+        let proofPage = 1;
+        let totalPages: number;
+        do {
+          const result = await apiRequest<{ proofs: (ProofData & { workerId?: string | { _id?: string } | null })[]; pages: number }>(
+            `/api/admin/proofs?workerId=${account}&page=${proofPage}&limit=100`, "GET", null, true,
+          );
+          allProofs.push(...result.proofs.filter(proof => {
+            const id = typeof proof.workerId === "string" ? proof.workerId : proof.workerId?._id;
+            return id === normalizedWorker.user._id;
+          }));
+          totalPages = result.pages;
+          proofPage++;
+        } while (proofPage <= totalPages);
+        setProofs(allProofs);
+      } else {
+        setProofs([]);
       }
 
       // Build activity timeline from available data
@@ -448,11 +414,12 @@ export default function Worker360Page() {
       setActivities(activityEvents);
     } catch (error: any) {
       console.error("Error loading worker data:", error);
-      toast(error.message || "Failed to load worker data", "error");
+      setWorker(null);
+      setLoadError(error.message || "Worker details could not be loaded.");
     } finally {
       setLoading(false);
     }
-  }, [workerId, toast, router]);
+  }, [workerId]);
 
   useEffect(() => {
     loadWorkerData();
@@ -501,29 +468,8 @@ export default function Worker360Page() {
     }
   };
 
-  const handleAssignProject = async () => {
-    if (!worker || !selectedProjectId) return;
-
-    setActionLoading("assign");
-    try {
-      await apiRequest(
-        `/api/admin/workspace/project/${selectedProjectId}/assign`,
-        "PUT",
-        { workerId: worker.user._id },
-        true,
-      );
-      toast(
-        "Project assigned! Worker has been notified. Next: wait for proof submission.",
-        "success",
-      );
-      setShowAssignModal(false);
-      setSelectedProjectId(null);
-      loadWorkerData();
-    } catch (error: any) {
-      toast(error.message || "Failed to assign project", "error");
-    } finally {
-      setActionLoading(null);
-    }
+  const chooseProject = () => {
+    if (worker) router.push(`/admin/workspace/projects?assignWorker=${encodeURIComponent(worker._id)}`);
   };
 
   const handleApproveProof = async (proofId: string, projectId: string) => {
@@ -531,25 +477,10 @@ export default function Worker360Page() {
 
     setActionLoading(`proof-${proofId}`);
     try {
-      // Approve the proof
-      await apiRequest(`/api/admin/proofs/${proofId}/approve`, "PUT", {}, true);
-
-      // Credit the earnings
-      const project = projects.find((p) => p._id === projectId);
-      if (project && project.payRate > 0) {
-        await apiRequest(
-          `/api/admin/workspace/project/${projectId}/credit`,
-          "PUT",
-          { amount: project.payRate },
-          true,
-        );
-      }
-
-      toast(
-        "Proof approved and earnings credited! Project complete. Worker is available for new assignments.",
-        "success",
-      );
-      loadWorkerData();
+      const project = projects.find(p => p._id === projectId);
+      const outcome = await approveWorkerProof(proofId, projectId, project?.payRate);
+      toast(outcome.message, outcome.type);
+      await loadWorkerData();
     } catch (error: any) {
       toast(error.message || "Failed to approve proof", "error");
     } finally {
@@ -563,7 +494,7 @@ export default function Worker360Page() {
       await apiRequest(
         `/api/admin/proofs/${proofId}/reject`,
         "PUT",
-        { reason },
+        { rejectionReason: reason },
         true,
       );
       toast("Proof rejected", "success");
@@ -586,6 +517,7 @@ export default function Worker360Page() {
         { adminNotes },
         true,
       );
+      setWorker(previous => previous ? { ...previous, adminNotes } : previous);
       toast("Notes saved", "success");
       setShowNotesModal(false);
     } catch (error: any) {
@@ -928,8 +860,10 @@ export default function Worker360Page() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white mb-4">
-            Worker Not Found
+            Worker details unavailable
           </h1>
+          <p role="alert" className="mb-3 text-slate-300">{loadError || "This worker could not be found."}</p>
+          <button className="mr-4 underline" onClick={loadWorkerData}>Try again</button>
           <Link
             href="/admin/workforce"
             className="text-cyan-400 hover:underline"
@@ -1144,7 +1078,7 @@ export default function Worker360Page() {
                   : !hasValidIdentity
                     ? "Worker identity not verified"
                     : undefined,
-              onClick: () => setShowAssignModal(true),
+              onClick: () => chooseProject(),
             },
             {
               key: "notes",
@@ -1190,7 +1124,7 @@ export default function Worker360Page() {
                     if (nextStep.action === "approve")
                       handleApproveApplication();
                     else if (nextStep.action === "assign_project")
-                      setShowAssignModal(true);
+                      chooseProject();
                     else if (nextStep.action === "reinstate") {
                       setNewStatus("ready_to_work");
                       handleStatusChange();
@@ -1418,7 +1352,7 @@ export default function Worker360Page() {
               {/* Ready to Work → Assign Project */}
               {worker.workerStatus === "ready_to_work" && hasValidIdentity && (
                 <button
-                  onClick={() => setShowAssignModal(true)}
+                  onClick={() => chooseProject()}
                   title="Opens project assignment modal - worker status will change to Assigned"
                   className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition flex items-center gap-2"
                 >
@@ -1431,7 +1365,7 @@ export default function Worker360Page() {
                 worker.workerStatus === "working") &&
                 (worker.currentProject ? (
                   <Link
-                    href={`/admin/workspace/projects`}
+                    href={`/admin/workspace/projects?action=view&id=${encodeURIComponent(worker.currentProject._id)}`}
                     title="View the project this worker is currently assigned to"
                     className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition flex items-center gap-2"
                   >
@@ -1476,7 +1410,7 @@ export default function Worker360Page() {
               {worker.workerStatus === "completed" && hasValidIdentity && (
                 <>
                   <button
-                    onClick={() => setShowAssignModal(true)}
+                    onClick={() => chooseProject()}
                     title="Opens project assignment modal - worker status will change to Assigned"
                     className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition flex items-center gap-2"
                   >
@@ -1943,7 +1877,7 @@ export default function Worker360Page() {
                     {hasValidIdentity &&
                       worker.workerStatus === "ready_to_work" && (
                         <button
-                          onClick={() => setShowAssignModal(true)}
+                          onClick={() => chooseProject()}
                           className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm transition"
                         >
                           + Assign Project
@@ -2391,68 +2325,6 @@ export default function Worker360Page() {
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition disabled:opacity-50"
               >
                 {actionLoading === "status" ? "Updating..." : "Override Status"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Assign Project Modal */}
-      {showAssignModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl p-6 max-w-lg w-full border border-slate-700">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Assign Project
-            </h3>
-            {availableProjects.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto mb-4">
-                {availableProjects.map((project) => (
-                  <label
-                    key={project._id}
-                    className={`flex items-center gap-3 p-4 rounded-lg cursor-pointer transition ${
-                      selectedProjectId === project._id
-                        ? "bg-cyan-600/20 border border-cyan-500"
-                        : "bg-slate-900/50 border border-slate-700 hover:border-slate-600"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="project"
-                      value={project._id}
-                      checked={selectedProjectId === project._id}
-                      onChange={() => setSelectedProjectId(project._id)}
-                      className="hidden"
-                    />
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{project.title}</p>
-                      <p className="text-sm text-slate-400">
-                        {project.category} • ${project.payRate}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-400 mb-4">
-                No available projects to assign
-              </p>
-            )}
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowAssignModal(false);
-                  setSelectedProjectId(null);
-                }}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignProject}
-                disabled={!selectedProjectId || actionLoading === "assign"}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition disabled:opacity-50"
-              >
-                {actionLoading === "assign" ? "Assigning..." : "Assign"}
               </button>
             </div>
           </div>

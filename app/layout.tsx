@@ -5,7 +5,7 @@ import "./globals.css";
 
 import { ToastProvider } from "@/hooks/useToast";
 import ToastViewport from "@/components/ToastViewport";
-import Navbar from "@/components/Navbar";
+import SiteFrame from "@/components/SiteFrame";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -31,8 +31,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body>
         <ToastProvider>
-          <Navbar />
-          <main className="pt-14">{children}</main>
+          <SiteFrame>{children}</SiteFrame>
           <ToastViewport />
         </ToastProvider>
       </body>

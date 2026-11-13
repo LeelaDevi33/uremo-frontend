@@ -77,14 +77,25 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
     if (!mobileOpen) return;
     const desktop = window.matchMedia("(min-width: 1024px)");
     const onResize = () => { if (desktop.matches) setMobileOpen(false); };
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") closeMobile(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMobile();
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(document.querySelectorAll<HTMLElement>('#admin-navigation a[href], #admin-navigation button, #admin-navigation input'))
+        .filter(element => element.getClientRects().length > 0);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
     const closeButton = document.querySelector<HTMLButtonElement>('#admin-navigation [aria-label="Close admin navigation"]');
     closeButton?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     desktop.addEventListener("change", onResize);
     window.addEventListener("keydown", onKey);
     return () => {
       desktop.removeEventListener("change", onResize);
       window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
     };
   }, [mobileOpen]);
   const [summary, setSummary] = useState<OperationsSummary | null>(null);
@@ -96,13 +107,14 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     if (!isLoggedIn) {
-      router.replace("/login");
+      const destination = pathname + window.location.search + window.location.hash;
+      router.replace("/login?next=" + encodeURIComponent(destination));
       return;
     }
     if (!isAdmin) {
       router.replace("/dashboard");
     }
-  }, [ready, isLoggedIn, isAdmin, router]);
+  }, [ready, isLoggedIn, isAdmin, router, pathname]);
 
   const refreshBadges = useCallback(async () => {
     const sequence = ++latest.current;
@@ -164,7 +176,8 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
 
   return (
     <AdminContext.Provider value={contextValue}>
-      <div className="min-h-screen bg-[#050810] flex">
+      <div className="min-h-screen bg-[#0c1318] flex">
+        <a href="#admin-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-2 focus:z-[60] focus:rounded focus:bg-white focus:p-3 focus:text-black">Skip to admin content</a>
         {/* Command Rail */}
         <CommandRail
           collapsed={railCollapsed && !mobileOpen}
@@ -174,7 +187,7 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
           badges={badges}
         />
         {mobileOpen && (
-          <button type="button" aria-label="Dismiss navigation overlay" onClick={closeMobile}
+          <button type="button" tabIndex={-1} aria-label="Dismiss navigation overlay" onClick={closeMobile}
             className="fixed inset-0 z-40 bg-black/60 lg:hidden" />
         )}
 
@@ -194,7 +207,7 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
           } />
 
           {/* Page Content */}
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main id="admin-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
         </div>
       </div>
     </AdminContext.Provider>

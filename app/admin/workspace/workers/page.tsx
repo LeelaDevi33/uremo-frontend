@@ -496,11 +496,11 @@ export default function AdminWorkersPage() {
                   ✅ Assign Task
                 </button>
                 <Link
-                  href={`/admin/work-positions?invite=${selectedWorker.userId?.email || ""}`}
+                  href="/open-roles"
                   onClick={() => setShowProfileModal(false)}
                   className="flex-1 px-4 py-3 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-xl font-semibold transition text-center"
                 >
-                  📝 Apply to Another Gig
+                  View open roles
                 </Link>
                 <button
                   onClick={() => setShowProfileModal(false)}

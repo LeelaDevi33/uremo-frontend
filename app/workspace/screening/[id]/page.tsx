@@ -90,7 +90,7 @@ export default function ScreeningTestPage() {
       setLoading(true);
       try {
         const res = await apiRequest(
-          `/api/workspace/screening/${screeningId}`,
+          `/api/workspace/screening/${screeningId}${positionId ? "?positionId=" + encodeURIComponent(positionId) : ""}`,
           "GET",
           null,
           true,
@@ -104,7 +104,7 @@ export default function ScreeningTestPage() {
       }
     };
     loadScreening();
-  }, [screeningId]);
+  }, [screeningId, positionId]);
 
   // Timer
   // PATCH_96: Use ref for handleSubmit to avoid stale closure in timer

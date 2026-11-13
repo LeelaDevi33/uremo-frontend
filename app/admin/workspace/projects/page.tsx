@@ -133,6 +133,7 @@ function ProjectsContent() {
   const showCreate = searchParams.get("action") === "create";
   const linkedProject = searchParams.get("action") === "view" ? searchParams.get("id") : null;
   const categoryParam = searchParams.get("category");
+  const requestedWorker = searchParams.get("assignWorker");
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [screenings, setScreenings] = useState<Screening[]>([]); // PATCH_64: For linkage
@@ -141,7 +142,7 @@ function ProjectsContent() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(showCreate);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>(requestedWorker ? "open" : "all");
   const [showLinkedScreenings, setShowLinkedScreenings] = useState(false); // PATCH_64
 
   // Create form state - PATCH_86: Added workPositionId
@@ -371,12 +372,13 @@ function ProjectsContent() {
       if (!current) return;
       if (!Array.isArray(result.workers)) throw new Error("Invalid eligibility response");
       setAssignableWorkers(result.workers);
+      if (requestedWorker && result.workers.some(worker => worker._id === requestedWorker)) setSelectedWorker(requestedWorker);
       setEligibilityInfo(result.eligibilityInfo);
     }).catch(() => {
       if (current) setEligibilityError(true);
     }).finally(() => { if (current) setLoadingEligible(false); });
     return () => { current = false; };
-  }, [assignModal, eligibilityVersion]);
+  }, [assignModal, eligibilityVersion, requestedWorker]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -576,6 +578,10 @@ function ProjectsContent() {
     return styles[priority] || "text-slate-400";
   };
 
+  const unassignedCount = projects.filter(p => p.status === "open" && !p.assignedTo && !p.marketplaceReserved).length;
+  const inProgressCount = projects.filter(p => ["in_progress", "in-progress", "assigned"].includes(p.status)).length;
+  const requestedEligible = assignableWorkers.some(worker => worker._id === requestedWorker);
+
   return (
     <div className="u-container max-w-6xl">
       {/* PATCH_79: Header with Clear Purpose */}
@@ -701,51 +707,8 @@ function ProjectsContent() {
                 Project Workflow:
               </h3>
               <ul className="text-sm text-slate-300 space-y-1">
-                {projects.filter((p) => p.status === "pending" && !p.assignedTo)
-                  .length > 0 && (
-                  <li>
-                    •{" "}
-                    <span className="text-amber-400 font-medium">
-                      {
-                        projects.filter(
-                          (p) => p.status === "pending" && !p.assignedTo,
-                        ).length
-                      }{" "}
-                      unassigned project
-                      {projects.filter(
-                        (p) => p.status === "pending" && !p.assignedTo,
-                      ).length > 1
-                        ? "s"
-                        : ""}
-                    </span>{" "}
-                    → Click "Assign" to give to a ready worker
-                  </li>
-                )}
-                {projects.filter(
-                  (p) => p.status === "in-progress" || p.status === "assigned",
-                ).length > 0 && (
-                  <li>
-                    •{" "}
-                    <span className="text-purple-400 font-medium">
-                      {
-                        projects.filter(
-                          (p) =>
-                            p.status === "in-progress" ||
-                            p.status === "assigned",
-                        ).length
-                      }{" "}
-                      project
-                      {projects.filter(
-                        (p) =>
-                          p.status === "in-progress" || p.status === "assigned",
-                      ).length > 1
-                        ? "s"
-                        : ""}{" "}
-                      in progress
-                    </span>{" "}
-                    → Workers are completing the work
-                  </li>
-                )}
+                {unassignedCount > 0 && <li>{unassignedCount} open {unassignedCount === 1 ? "project" : "projects"} available for assignment</li>}
+                {inProgressCount > 0 && <li>{inProgressCount} {inProgressCount === 1 ? "project" : "projects"} in progress</li>}
                 {projects.filter(
                   (p) => p.status === "completed" && !p.earningsCredited,
                 ).length > 0 && (
@@ -796,19 +759,25 @@ function ProjectsContent() {
         </div>
       )}
 
+      {requestedWorker && <p className="mb-4 rounded-lg border border-cyan-500/30 p-3 text-sm">
+        Choose an open project and select Assign to check this worker’s eligibility.{" "}
+        <Link className="underline" href={`/admin/workforce/${encodeURIComponent(requestedWorker)}`}>View worker</Link>
+      </p>}
+
       {/* Filters */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {["all", "pending", "assigned", "in-progress", "completed"].map((f) => (
+        {["all", "draft", "open", "assigned", "in_progress", "completed", "cancelled"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
+            aria-pressed={filter === f}
             className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
               filter === f
                 ? "bg-blue-600 text-white"
                 : "bg-white/5 text-slate-400 hover:bg-white/10"
             }`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1).replace("-", " ")}
+            {f.charAt(0).toUpperCase() + f.slice(1).replace("_", " ")}
           </button>
         ))}
       </div>
@@ -1245,7 +1214,9 @@ function ProjectsContent() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-1">
+              {requestedWorker && !loadingEligible && !eligibilityError && !requestedEligible &&
+                <p role="status" className="mb-2 text-amber-300">This worker is ineligible for this project. Select another project or choose an eligible worker below.</p>}
+              <label htmlFor="assign-worker" className="block text-sm text-slate-400 mb-1">
                 Select Eligible Worker (
                 {loadingEligible ? "..." : assignableWorkers.length} available)
               </label>
@@ -1274,7 +1245,7 @@ function ProjectsContent() {
                   )}
                 </div>
               ) : (
-                <select
+                <select id="assign-worker"
                   value={selectedWorker}
                   onChange={(e) => setSelectedWorker(e.target.value)}
                   className="input w-full"
@@ -1306,8 +1277,7 @@ function ProjectsContent() {
                 </div>
                 <ul className="text-sm text-blue-200 space-y-1">
                   <li>✓ Project status will change to "Assigned"</li>
-                  <li>✓ Worker will be notified of new assignment</li>
-                  <li>✓ Worker status will update to "Working"</li>
+                  <li>✓ The project will appear in the worker’s workspace.</li>
                 </ul>
               </div>
             )}
@@ -1345,7 +1315,7 @@ function ProjectsContent() {
         onClose={() => setAssignConfirmOpen(false)}
         onConfirm={executeAssign}
         title="Confirm Worker Assignment"
-        description={`You are about to assign "${assignModal?.title || "this project"}" to the selected worker. The worker will be notified immediately.`}
+        description={`You are about to assign "${assignModal?.title || "this project"}" to the selected worker.`}
         variant="info"
         loading={assigning}
         confirmLabel="Confirm Assignment"
@@ -1363,7 +1333,7 @@ function ProjectsContent() {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">New Status:</span>
-              <span className="text-blue-400">Assigned → Working</span>
+              <span className="text-blue-400">Assigned</span>
             </div>
           </div>
         }

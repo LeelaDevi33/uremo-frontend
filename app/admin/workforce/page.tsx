@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/api";
+import { approveWorkerProof } from "./reviewProof";
 import { useToast } from "@/hooks/useToast";
 import {
   WorkerPipelineBoard,
@@ -40,16 +42,9 @@ interface Stats {
   total: number;
 }
 
-interface Project {
-  _id: string;
-  title: string;
-  earnings: number;
-  status: string;
-  assignedTo?: any;
-}
-
 export default function WorkforceControlCenterPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>("pipeline");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -62,7 +57,6 @@ export default function WorkforceControlCenterPage() {
     PendingApplication[]
   >([]);
   const [pendingCredits, setPendingCredits] = useState<PendingCredit[]>([]);
-  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
   const [stats, setStats] = useState<Stats>({
     applied: 0,
     screening: 0,
@@ -77,7 +71,6 @@ export default function WorkforceControlCenterPage() {
   // Modal states
   const [selectedWorker, setSelectedWorker] = useState<WorkerData | null>(null);
   const [showTimelineModal, setShowTimelineModal] = useState(false);
-  const [showAssignModal, setShowAssignModal] = useState(false);
   const [showCreditModal, setShowCreditModal] = useState(false);
   const [showRejectProofModal, setShowRejectProofModal] = useState(false);
   const [pendingProofId, setPendingProofId] = useState<string | null>(null);
@@ -92,7 +85,7 @@ export default function WorkforceControlCenterPage() {
     setLoading(true);
     try {
       // Fetch workers, proofs, applications, and projects in parallel
-      const [workersRes, proofsRes, appsRes, projectsRes] = await Promise.all([
+      const [workersRes, proofsRes, appsRes] = await Promise.all([
         apiRequest<any>(
           "/api/admin/workspace/workers?limit=500",
           "GET",
@@ -102,12 +95,6 @@ export default function WorkforceControlCenterPage() {
         apiRequest<any>("/api/admin/proofs?status=pending", "GET", null, true),
         apiRequest<any>(
           "/api/apply-work/admin?status=pending&limit=100",
-          "GET",
-          null,
-          true,
-        ),
-        apiRequest<any>(
-          "/api/admin/workspace/projects?status=pending",
           "GET",
           null,
           true,
@@ -193,11 +180,6 @@ export default function WorkforceControlCenterPage() {
           assignedTo: p.assignedTo,
           completedAt: p.completedAt,
         })),
-      );
-
-      // Available projects for assignment
-      setAvailableProjects(
-        (projectsRes.projects || []).filter((p: any) => p.status === "pending"),
       );
 
       // Completed workers (recently paid)
@@ -408,12 +390,7 @@ export default function WorkforceControlCenterPage() {
           break;
 
         case "assign_project":
-          // Open assign modal
-          const assignWorker = workers.find(
-            (w) => w.applicationId === workerId || w._id === workerId,
-          );
-          setSelectedWorker(assignWorker || null);
-          setShowAssignModal(true);
+          router.push(`/admin/workspace/projects?assignWorker=${encodeURIComponent(workerId)}`);
           setActionLoading(null);
           return;
 
@@ -430,47 +407,10 @@ export default function WorkforceControlCenterPage() {
 
         case "approve_proof":
         case "approve_and_credit":
-          // Approve proof and credit earnings in one action
           const proofId = data?.proofId || workerId;
-
-          // First approve the proof
-          await apiRequest(
-            `/api/admin/proofs/${proofId}/approve`,
-            "PUT",
-            {},
-            true,
-          );
-
-          // Get the proof to find project and amount
-          const proof = pendingProofs.find((p) => p._id === proofId);
-          if (proof?.projectId?._id) {
-            // Then credit earnings
-            const creditAmt = data?.amount || proof.projectId.payRate || 0;
-            if (creditAmt > 0) {
-              await apiRequest(
-                `/api/admin/workspace/project/${proof.projectId._id}/credit`,
-                "PUT",
-                { amount: creditAmt },
-                true,
-              );
-            }
-            if (creditAmt > 0) {
-              toast(
-                "Proof approved and earnings credited! Worker is now available for new projects.",
-                "success",
-              );
-            } else {
-              toast(
-                "Proof approved. Earnings credit skipped (missing or zero amount). Next: set project pay rate and credit manually if needed.",
-                "success",
-              );
-            }
-          } else {
-            toast(
-              "Proof approved. Earnings credit skipped (proof is not linked to a project). Next: review proof details and ensure it references a project before crediting.",
-              "success",
-            );
-          }
+          const proof = pendingProofs.find(item => item._id === proofId);
+          const outcome = await approveWorkerProof(proofId, proof?.projectId?._id, data?.amount ?? proof?.projectId?.payRate);
+          toast(outcome.message, outcome.type);
           break;
 
         case "reject_proof":
@@ -584,36 +524,6 @@ export default function WorkforceControlCenterPage() {
     } catch (err: any) {
       console.error("Action failed:", err);
       toast(err.message || "Action failed", "error");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Handle project assignment confirmation
-  const handleAssignConfirm = async (data: { projectId: string }) => {
-    if (!selectedWorker) return;
-
-    setActionLoading(selectedWorker.applicationId);
-    try {
-      const positionId =
-        selectedWorker.jobId?._id || selectedWorker.position?._id;
-
-      await apiRequest(
-        `/api/admin/workspace/project/${data.projectId}/assign`,
-        "PUT",
-        { workerId: selectedWorker.userId?._id },
-        true,
-      );
-
-      toast(
-        "Project assigned! Worker has been notified. Next: wait for proof submission.",
-        "success",
-      );
-      setShowAssignModal(false);
-      setSelectedWorker(null);
-      await loadData();
-    } catch (err: any) {
-      toast(err.message || "Failed to assign project", "error");
     } finally {
       setActionLoading(null);
     }
@@ -990,7 +900,7 @@ export default function WorkforceControlCenterPage() {
                             </Link>
                           ) : worker.workerStatus === "ready_to_work" ? (
                             <Link
-                              href={`/admin/workforce/${worker.applicationId}`}
+                              href={`/admin/workspace/projects?assignWorker=${encodeURIComponent(worker.applicationId)}`}
                               className="px-3 py-1 text-xs bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded-lg transition-colors inline-block font-medium"
                             >
                               Assign Project →
@@ -1072,19 +982,6 @@ export default function WorkforceControlCenterPage() {
         worker={selectedWorker}
         onAction={handleAction}
         actionLoading={actionLoading}
-      />
-
-      <WorkerActionPanel
-        type="assign_project"
-        isOpen={showAssignModal}
-        onClose={() => {
-          setShowAssignModal(false);
-          setSelectedWorker(null);
-        }}
-        onConfirm={handleAssignConfirm}
-        worker={selectedWorker}
-        projects={availableProjects}
-        loading={!!actionLoading}
       />
 
       <WorkerActionPanel

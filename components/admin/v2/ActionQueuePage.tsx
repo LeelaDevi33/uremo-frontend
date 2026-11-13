@@ -156,7 +156,7 @@ export default function ActionQueuePage() {
               subtitle: `Project: ${proof.projectId?.title?.slice(0, 30) || "Unknown"}`,
               details: {
                 what: `Work proof submitted for review`,
-                who: `Worker: ${proof.workerId?.userId?.email || "Unknown"}`,
+                who: `Worker: ${proof.workerId?.name || proof.workerId?.email || "Account unavailable"}`,
                 action: "Verify work quality and approve/reject proof",
               },
               priority:
@@ -193,7 +193,7 @@ export default function ActionQueuePage() {
               subtitle: ticket.subject?.slice(0, 50) || "Support request",
               details: {
                 what: `Support request needs response`,
-                who: `From: ${ticket.userId?.email || "User"}`,
+                who: `From: ${ticket.user?.name || ticket.user?.email || "Account unavailable"}`,
                 action: "Read ticket and provide response",
               },
               priority:
@@ -204,7 +204,7 @@ export default function ActionQueuePage() {
                     : "medium",
               revenueImpact: 0,
               blockedHours,
-              href: `/admin/tickets`,
+              href: `/admin/tickets/${ticket._id}`,
               actionLabel: "Respond",
               meta: ticket,
             });
@@ -229,10 +229,10 @@ export default function ActionQueuePage() {
               id: `app-${app._id}`,
               type: "application",
               title: `Job Application Pending Review`,
-              subtitle: `Position: ${app.positionId?.title || "Unknown"}`,
+              subtitle: app.position?.title || app.positionTitle || app.category || "Historical application",
               details: {
                 what: `New application submitted for review`,
-                who: `Applicant: ${app.userId?.email || "Unknown"}`,
+                who: `Applicant: ${app.user?.name || app.user?.email || "Account unavailable"}`,
                 action: "Review application and approve/reject",
               },
               priority: blockedHours > 48 ? "high" : "medium",
@@ -332,19 +332,14 @@ export default function ActionQueuePage() {
   };
 
   return (
-    <div className="min-h-screen p-4 lg:p-6">
+    <section aria-labelledby="action-queue" className="min-w-0">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
-          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center text-base shadow-lg">
-            AQ
-          </span>
-          Action Queue
-        </h1>
+        <h2 id="action-queue" className="text-xl font-semibold text-white">Action queue</h2>
         <p className="text-slate-400 mt-1 text-sm">
           {loading
             ? "Checking..."
-            : `${actions.length} items require your action`}
+            : `${actions.length} ${actions.length === 1 ? "item" : "items"} awaiting review`}
         </p>
       </div>
 
@@ -421,8 +416,7 @@ export default function ActionQueuePage() {
           </div>
         ) : filteredActions.length === 0 ? (
           <div className="p-12 text-center">
-            <div className="text-4xl mb-3">OK</div>
-            <div className="text-white font-medium">Queue Empty</div>
+            <div className="text-white font-medium">No items to show</div>
             <div className="text-slate-500 text-sm">
               {partial ? "No items in the queues that responded." : "No pending items in this view."}
             </div>
@@ -435,7 +429,7 @@ export default function ActionQueuePage() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -480,6 +474,8 @@ function FilterTab({
 }) {
   return (
     <button
+      type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap
                  ${
@@ -607,9 +603,9 @@ function ActionRow({ action }: { action: ActionItem }) {
               {Math.abs(action.revenueImpact)}
             </span>
           )}
-          <button className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">
+          <span className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white">
             {action.actionLabel}
-          </button>
+          </span>
         </div>
       </div>
     </Link>
