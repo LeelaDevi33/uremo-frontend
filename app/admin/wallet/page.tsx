@@ -31,6 +31,7 @@ interface Transaction {
   // PATCH_82: Added paid_unverified for PayPal
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
+  settlementReference?: string;
   failureReason?: string;
   user?: { _id: string; name: string; email: string };
 }
@@ -91,6 +92,7 @@ export default function AdminWalletPage() {
   const [pendingTopups, setPendingTopups] = useState<Transaction[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [settlementReferences, setSettlementReferences] = useState<Record<string, string>>({});
 
   // PATCH_115: Withdrawal requests
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
@@ -180,6 +182,7 @@ export default function AdminWalletPage() {
         transactionId,
         action,
         reason,
+        settlementReference: action === "approve" ? settlementReferences[transactionId]?.trim() : undefined,
       });
       toast(res.message || `Topup ${action}d successfully`, "success");
       fetchPendingTopups(); // Refresh the list
@@ -499,6 +502,16 @@ export default function AdminWalletPage() {
                         </span>
                       </div>
                     </div>
+                    {(!topup.provider || ["manual", "internal"].includes(topup.provider)) && (
+                      <label className="mt-3 block text-sm text-slate-300">
+                        Verified payment reference
+                        <input type="text" autoComplete="off" maxLength={80}
+                          value={settlementReferences[topup._id] || ""}
+                          onChange={event => setSettlementReferences(current => ({ ...current, [topup._id]: event.target.value }))}
+                          className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-white" />
+                        <span className="mt-1 block text-xs">Match the payer and amount to the payment record before approving.</span>
+                      </label>
+                    )}
                     <div className="mt-3 flex gap-2 justify-end">
                       <button
                         onClick={() => handleVerifyTopup(topup._id, "reject")}
@@ -509,7 +522,8 @@ export default function AdminWalletPage() {
                       </button>
                       <button
                         onClick={() => handleVerifyTopup(topup._id, "approve")}
-                        disabled={verifyingId === topup._id}
+                        disabled={verifyingId === topup._id || ((!topup.provider || ["manual", "internal"].includes(topup.provider)) &&
+                          !/^[a-z0-9][a-z0-9._/-]{3,79}$/i.test(settlementReferences[topup._id]?.trim() || ""))}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                       >
                         {verifyingId === topup._id ? "..." : "✓ Approve"}
@@ -834,6 +848,7 @@ export default function AdminWalletPage() {
                           <p className="text-sm font-medium">
                             {getSourceLabel(tx.source)}
                           </p>
+                          {tx.settlementReference && <p className="break-all text-xs text-slate-300">Payment reference: {tx.settlementReference}</p>}
                           <p className="text-xs text-slate-500">
                             {new Date(tx.createdAt).toLocaleString()}
                           </p>
