@@ -157,7 +157,11 @@ function LoginForm() {
         </h1>
 
         <div className="mb-3">
+          <label htmlFor="login-email" className="mb-1 block text-sm text-slate-200">Email</label>
           <input
+            id="login-email"
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "login-email-error" : undefined}
             className={`w-full border p-2 rounded bg-slate-700 text-white placeholder-slate-400 ${
               errors.email ? "border-red-500" : "border-slate-600"
             }`}
@@ -174,14 +178,18 @@ function LoginForm() {
             autoComplete="email"
           />
           {errors.email && (
-            <p className="text-red-400 text-xs mt-1">{errors.email}</p>
+            <p id="login-email-error" role="alert" className="text-red-400 text-xs mt-1">{errors.email}</p>
           )}
         </div>
 
         {/* PATCH_54: Password with visibility toggle */}
         <div className="mb-4">
+          <label htmlFor="login-password" className="mb-1 block text-sm text-slate-200">Password</label>
           <div className="relative">
             <input
+              id="login-password"
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={errors.password ? "login-password-error" : undefined}
               className={`w-full border p-2 pr-10 rounded bg-slate-700 text-white placeholder-slate-400 ${
                 errors.password ? "border-red-500" : "border-slate-600"
               }`}
@@ -201,14 +209,13 @@ function LoginForm() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
             </button>
           </div>
           {errors.password && (
-            <p className="text-red-400 text-xs mt-1">{errors.password}</p>
+            <p id="login-password-error" role="alert" className="text-red-400 text-xs mt-1">{errors.password}</p>
           )}
         </div>
 
