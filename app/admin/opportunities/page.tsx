@@ -173,6 +173,10 @@ export default function AdminOpportunitiesPage() {
       setBusy(false);
     }
   }
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("edit");
+    if (id && /^[a-f\d]{24}$/i.test(id)) void openListing(id);
+  }, []);
   function change<K extends keyof Draft>(key: K, value: Draft[K]) {
     setEdit((current) =>
       current
@@ -453,7 +457,7 @@ export default function AdminOpportunitiesPage() {
               ))}
             </ul>
           )}
-          <OpportunityReceipts />
+          <OpportunityReceipts onRefund={refresh} />
         </>
       ) : (
         <form onSubmit={save} noValidate>
@@ -494,7 +498,8 @@ export default function AdminOpportunitiesPage() {
               {!loading && !projectError && !choices.length && <p className="mt-2 text-sm">Create an unassigned draft or open project in a specialization to offer paid access.</p>}
               {selected?.workPositionId && <p className="mt-2 text-sm text-slate-300">Specialization: {selected.workPositionId.title}</p>}
               <div className="mt-3 flex flex-wrap gap-4 text-sm text-cyan-300">
-                <Link href="/admin/workspace/projects" target="_blank" rel="noopener noreferrer" className="underline">Manage projects</Link>
+                <Link href={draft.projectId ? `/admin/workspace/projects?action=view&id=${encodeURIComponent(draft.projectId)}` : "/admin/workspace/projects"} target="_blank" rel="noopener noreferrer" className="underline">{draft.projectId ? "Open linked project" : "Manage projects"}</Link>
+                {existing?.workPositionId && <Link href={`/admin/work-positions?edit=${encodeURIComponent(existing.workPositionId)}`} target="_blank" rel="noopener noreferrer" className="underline">Edit specialization</Link>}
                 <button type="button" onClick={refresh} className="underline">Refresh project choices</button>
               </div>
               {projectError && <p role="alert" className="mt-2 text-sm text-amber-300">Project choices could not load. Refresh to try again.</p>}

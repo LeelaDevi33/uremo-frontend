@@ -30,7 +30,7 @@ function GrantCard({ grant, token, initialOpen }: { grant: AccessGrant; token: s
   return <article className={styles.grant}>
     <div className={styles.cardMeta}>
       <span className={styles.category}><MarketIcon name={grant.type} />{rented ? "Rental" : "Full Access"}</span>
-      <span className={grant.active ? styles.active : styles.status}>{grant.active ? "Active access" : "Ended"}</span>
+      <span className={grant.active ? styles.active : styles.status}>{grant.refundedAt ? "Refunded to wallet" : grant.active ? "Active access" : "Ended"}</span>
     </div>
     <h2>{grant.title}</h2>
 
@@ -39,6 +39,7 @@ function GrantCard({ grant, token, initialOpen }: { grant: AccessGrant; token: s
       <div><dt>Paid</dt><dd>{formatPrice(grant.amount, grant.currency)}</dd></div>
       <div><dt>{rented ? "Starts" : "Purchased"}</dt><dd>{grantDate(grant.startsAt)}</dd></div>
       <div><dt>{rented ? "Ends" : "Access term"}</dt><dd>{rented ? grantDate(grant.endsAt) : "Permanent"}</dd></div>
+      {grant.refundedAt && <div><dt>Access revoked</dt><dd>{grantDate(grant.refundedAt)}</dd></div>}
     </dl>
     <div className={styles.buttonRow}>
       {grant.active && <button type="button" className={styles.secondary} aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? "Hide access details" : "Show access details"}</button>}

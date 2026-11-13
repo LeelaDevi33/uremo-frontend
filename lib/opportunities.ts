@@ -34,6 +34,7 @@ export type AccessGrant = {
   currency: "USD";
   startsAt: string;
   endsAt: string | null;
+  refundedAt?: string | null;
   active: boolean;
 };
 
