@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
+import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
 
 // PATCH_54: Eye icons for password visibility
@@ -45,8 +46,8 @@ const EyeSlashIcon = () => (
   </svg>
 );
 
-export default function Login() {
-  const router = useRouter();
+function LoginForm() {
+  const next = authReturnPath(useSearchParams().get("next"));
   const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -89,16 +90,6 @@ export default function Login() {
       return;
     }
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[LOGIN_PAYLOAD]", {
-        endpoint: "/api/auth/login",
-        email: String(email).trim().toLowerCase(),
-        hasPassword: Boolean(password),
-        passwordLength: String(password).length,
-        apiBase: process.env.NEXT_PUBLIC_API_URL || "(missing)",
-      });
-    }
-
     setLoading(true);
     try {
       const res = await apiRequest("/api/auth/login", "POST", {
@@ -108,7 +99,7 @@ export default function Login() {
 
       setAuthSession({ token: res.token, user: res.user });
       toast("Login successful!", "success");
-      router.push("/dashboard");
+      window.location.replace(next || "/dashboard");
     } catch (err: any) {
       // PATCH_54: Better error handling
       const message = err.message || "Login failed";
@@ -137,16 +128,9 @@ export default function Login() {
     }
   };
 
-  // PATCH_54: Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      submit();
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
+      <form noValidate onSubmit={event => { event.preventDefault(); if (!loading) void submit(); }} className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
         <h1 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
           <span role="img" aria-label="login">
             🔑
@@ -155,7 +139,11 @@ export default function Login() {
         </h1>
 
         <div className="mb-3">
+          <label htmlFor="login-email" className="mb-1 block text-sm text-slate-200">Email</label>
           <input
+            id="login-email"
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "login-email-error" : undefined}
             className={`w-full border p-2 rounded bg-slate-700 text-white placeholder-slate-400 ${
               errors.email ? "border-red-500" : "border-slate-600"
             }`}
@@ -167,19 +155,22 @@ export default function Login() {
               if (errors.email)
                 setErrors((prev) => ({ ...prev, email: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="email"
           />
           {errors.email && (
-            <p className="text-red-400 text-xs mt-1">{errors.email}</p>
+            <p id="login-email-error" role="alert" className="text-red-400 text-xs mt-1">{errors.email}</p>
           )}
         </div>
 
         {/* PATCH_54: Password with visibility toggle */}
         <div className="mb-4">
+          <label htmlFor="login-password" className="mb-1 block text-sm text-slate-200">Password</label>
           <div className="relative">
             <input
+              id="login-password"
+              aria-invalid={Boolean(errors.password)}
+              aria-describedby={errors.password ? "login-password-error" : undefined}
               className={`w-full border p-2 pr-10 rounded bg-slate-700 text-white placeholder-slate-400 ${
                 errors.password ? "border-red-500" : "border-slate-600"
               }`}
@@ -191,7 +182,6 @@ export default function Login() {
                 if (errors.password)
                   setErrors((prev) => ({ ...prev, password: undefined }));
               }}
-              onKeyDown={handleKeyDown}
               disabled={loading}
               autoComplete="current-password"
             />
@@ -199,19 +189,18 @@ export default function Login() {
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-              tabIndex={-1}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
             </button>
           </div>
           {errors.password && (
-            <p className="text-red-400 text-xs mt-1">{errors.password}</p>
+            <p id="login-password-error" role="alert" className="text-red-400 text-xs mt-1">{errors.password}</p>
           )}
         </div>
 
         <button
-          onClick={submit}
+          type="submit"
           disabled={loading}
           className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -230,11 +219,19 @@ export default function Login() {
 
         <p className="text-sm mt-2 text-slate-400">
           Don't have an account?{" "}
-          <a href="/signup" className="text-indigo-400 hover:underline">
+          <a href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="text-indigo-400 hover:underline">
             Sign up
           </a>
         </p>
-      </div>
+      </form>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<p className="p-6 text-slate-400">Loading login…</p>}>
+      <LoginForm />
+    </Suspense>
   );
 }

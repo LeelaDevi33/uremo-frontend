@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -31,6 +31,11 @@ interface Transaction {
   // PATCH_82: Added paid_unverified for PayPal
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
+  canUndo?: boolean;
+  undoTransactionId?: string;
+  settlementReference?: string;
+  methodName?: string;
+  paymentReference?: string;
   failureReason?: string;
   user?: { _id: string; name: string; email: string };
 }
@@ -43,7 +48,7 @@ interface Stats {
 
 interface WithdrawalRequest {
   _id: string;
-  userId: { _id: string; name: string; email: string };
+  userId: { _id: string; name: string; email: string } | null;
   amount: number;
   method: string;
   note?: string;
@@ -57,16 +62,10 @@ interface WithdrawalRequest {
 export default function AdminWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { ready, isAdmin } = useAuth();
+  const { ready, isAdmin, user: admin } = useAuth();
   const undoToast = useUndoToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [lastAdjustment, setLastAdjustment] = useState<{
-    userId: string;
-    amount: number;
-    type: "credit" | "debit";
-  } | null>(null);
-
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -86,15 +85,32 @@ export default function AdminWalletPage() {
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustDescription, setAdjustDescription] = useState("");
   const [adjustLoading, setAdjustLoading] = useState(false);
+  const [adjustError, setAdjustError] = useState("");
+  const adjustmentRequests = useRef(new Map<string, string>());
+  const adjustmentBusy = useRef(false);
+  const [undoing, setUndoing] = useState("");
+  const walletRequest = useRef(0);
+  const activeWallet = useRef("");
 
   // PATCH_80: Pending topups
   const [pendingTopups, setPendingTopups] = useState<Transaction[]>([]);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPages, setPendingPages] = useState(1);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingError, setPendingError] = useState("");
+  const pendingRequest = useRef(0);
   const [pendingLoading, setPendingLoading] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [settlementReferences, setSettlementReferences] = useState<Record<string, string>>({});
 
   // PATCH_115: Withdrawal requests
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [withdrawalLoading, setWithdrawalLoading] = useState(false);
+  const [withdrawalCursors, setWithdrawalCursors] = useState<string[]>([]);
+  const [nextWithdrawalCursor, setNextWithdrawalCursor] = useState<string | null>(null);
+  const [withdrawalError, setWithdrawalError] = useState(false);
+  const [withdrawalReload, setWithdrawalReload] = useState(0);
+  const withdrawalBefore = withdrawalCursors.at(-1);
   const [withdrawalFilter, setWithdrawalFilter] = useState<
     "all" | "pending" | "approved" | "rejected" | "paid"
   >("pending");
@@ -107,16 +123,27 @@ export default function AdminWalletPage() {
       return;
     }
     fetchStats();
-    fetchPendingTopups(); // PATCH_80: Fetch pending topups on load
-    fetchWithdrawals(); // PATCH_115: Fetch withdrawal requests on load
   }, [ready, isAdmin, router]);
 
-  // PATCH_115: Re-fetch withdrawals when filter changes
   useEffect(() => {
-    if (ready && isAdmin && withdrawalFilter) {
-      fetchWithdrawals();
-    }
-  }, [withdrawalFilter]);
+    if (!ready || !isAdmin) return;
+    let current = true;
+    const query = new URLSearchParams();
+    if (withdrawalFilter !== "all") query.set("status", withdrawalFilter);
+    if (withdrawalBefore) query.set("before", withdrawalBefore);
+    setWithdrawalLoading(true);
+    setWithdrawalError(false);
+    setNextWithdrawalCursor(null);
+    apiRequest("/api/admin/wallet/withdrawals?" + query, "GET")
+      .then(result => {
+        if (!current) return;
+        setWithdrawals(result.withdrawals);
+        setNextWithdrawalCursor(result.nextCursor ?? null);
+      })
+      .catch(() => { if (current) { setWithdrawals([]); setWithdrawalError(true); } })
+      .finally(() => { if (current) setWithdrawalLoading(false); });
+    return () => { current = false; };
+  }, [ready, isAdmin, withdrawalFilter, withdrawalBefore, withdrawalReload]);
 
   const fetchStats = async () => {
     try {
@@ -131,35 +158,28 @@ export default function AdminWalletPage() {
 
   // PATCH_80: Fetch pending topups
   const fetchPendingTopups = async () => {
+    const request = ++pendingRequest.current;
     setPendingLoading(true);
     try {
-      const res = await apiRequest("/api/admin/wallet/pending-topups", "GET");
+      const res = await apiRequest("/api/admin/wallet/pending-topups?page=" + pendingPage, "GET");
+      if (request !== pendingRequest.current) return;
+      const pages = Math.max(1, res.pages);
+      setPendingPages(pages);
+      setPendingTotal(res.total);
+      setPendingError("");
       setPendingTopups(res.pendingTopups || []);
-    } catch (err: any) {
-      console.error("Failed to fetch pending topups:", err);
+      if (pendingPage > pages) setPendingPage(pages);
+    } catch (cause) {
+      if (request === pendingRequest.current) setPendingError(cause instanceof Error ? cause.message : "Could not load pending transfers.");
     } finally {
-      setPendingLoading(false);
+      if (request === pendingRequest.current) setPendingLoading(false);
     }
   };
+  useEffect(() => {
+    if (ready && isAdmin) void fetchPendingTopups();
+  }, [ready, isAdmin, pendingPage]);
 
-  // PATCH_115: Fetch withdrawal requests
-  const fetchWithdrawals = async () => {
-    setWithdrawalLoading(true);
-    try {
-      const filter =
-        withdrawalFilter !== "all" ? `?status=${withdrawalFilter}` : "";
-      const res = await apiRequest(
-        `/api/admin/wallet/withdrawals${filter}`,
-        "GET",
-      );
-      setWithdrawals(res.withdrawals || []);
-    } catch (err: any) {
-      console.error("Failed to fetch withdrawals:", err);
-      toast("Failed to load withdrawals", "error");
-    } finally {
-      setWithdrawalLoading(false);
-    }
-  };
+  const fetchWithdrawals = () => setWithdrawalReload(value => value + 1);
 
   // PATCH_80: Verify (approve/reject) a pending topup
   // PATCH_81: Enhanced with double-click protection and already-processed handling
@@ -180,13 +200,14 @@ export default function AdminWalletPage() {
         transactionId,
         action,
         reason,
+        settlementReference: action === "approve" ? settlementReferences[transactionId]?.trim() : undefined,
       });
       toast(res.message || `Topup ${action}d successfully`, "success");
       fetchPendingTopups(); // Refresh the list
       fetchStats(); // Refresh stats
     } catch (err: any) {
       // PATCH_81: Handle already-processed case gracefully
-      if (err.alreadyProcessed) {
+      if (err.payload?.alreadyProcessed) {
         toast("This topup was already processed by another admin", "info");
         fetchPendingTopups(); // Remove from list
       } else {
@@ -308,70 +329,86 @@ export default function AdminWalletPage() {
   };
 
   const selectUser = async (user: User) => {
+    const request = ++walletRequest.current;
+    activeWallet.current = user._id;
     setSelectedUser(user);
     setUserLoading(true);
     try {
       const res = await apiRequest(`/api/admin/wallet/user/${user._id}`, "GET");
+      if (request !== walletRequest.current) return;
       setSelectedUser(res.user);
       setUserTransactions(res.transactions || []);
     } catch (err: any) {
       toast(err.message || "Failed to load user wallet", "error");
     } finally {
-      setUserLoading(false);
+      if (request === walletRequest.current) setUserLoading(false);
     }
   };
 
   const handleAdjust = async () => {
-    const amount = parseFloat(adjustAmount);
-    if (!amount || amount <= 0) {
-      toast("Amount must be greater than 0", "error");
+    if (!selectedUser || adjustmentBusy.current) return;
+    const amount = Number(adjustAmount);
+    const description = adjustDescription.trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(adjustAmount) || !Number.isFinite(amount) || amount <= 0 || !description) {
+      setAdjustError("Enter a positive USD amount with up to two decimal places and a reason.");
       return;
     }
 
-    if (!selectedUser) return;
-
-    const userId = selectedUser._id;
-    const currentType = adjustType;
-
+    const fields = { userId: selectedUser._id, amount, type: adjustType, description };
+    const key = "uremo-admin-adjustment:" + JSON.stringify([admin?.email, fields]);
+    function forgetRequest() {
+      adjustmentRequests.current.delete(key);
+      try { sessionStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
+    }
+    adjustmentBusy.current = true;
     setAdjustLoading(true);
+    setAdjustError("");
     try {
-      const res = await apiRequest("/api/admin/wallet/adjust", "POST", {
-        userId: selectedUser._id,
-        amount,
-        type: adjustType,
-        description: adjustDescription,
-      });
-      toast(res.message || "Balance adjusted", "success");
-      setLastAdjustment({ userId, amount, type: currentType });
+      let requestId = adjustmentRequests.current.get(key);
+      if (!requestId) {
+        try { requestId = sessionStorage.getItem(key) || undefined; } catch { /* Use the in-memory request. */ }
+        requestId ||= crypto.randomUUID();
+        adjustmentRequests.current.set(key, requestId);
+        try { sessionStorage.setItem(key, requestId); } catch { /* Same-tab retries still work. */ }
+      }
+      const receipt = await apiRequest<{ transactionId: string }>("/api/admin/wallet/adjust", "POST", { ...fields, requestId }, true);
+      if (!/^[a-f\d]{24}$/i.test(receipt?.transactionId)) throw new Error("No adjustment receipt received.");
+      forgetRequest();
       setShowAdjust(false);
       setAdjustAmount("");
       setAdjustDescription("");
-      selectUser(selectedUser); // Refresh user data
-      fetchStats(); // Refresh stats
+      if (activeWallet.current === selectedUser._id) void selectUser(selectedUser);
+      void fetchStats();
 
-      // PATCH_67: Show undo toast for wallet adjustment
-      undoToast.showUndo(
-        `${currentType === "credit" ? "Credited" : "Debited"} $${amount.toFixed(2)}`,
-        async () => {
-          // Reverse the adjustment
-          const reverseType = currentType === "credit" ? "debit" : "credit";
-          await apiRequest("/api/admin/wallet/adjust", "POST", {
-            userId,
-            amount,
-            type: reverseType,
-            description: `Undo: ${adjustDescription}`,
-          });
-          toast("Adjustment undone", "info");
-          selectUser(selectedUser);
-          fetchStats();
-        },
-      );
-    } catch (err: any) {
-      toast(err.message || "Adjustment failed", "error");
+      undoToast.showUndo(`${adjustType === "credit" ? "Credited" : "Debited"} $${amount.toFixed(2)} · Receipt ${receipt.transactionId}`,
+        () => void undoAdjustment(receipt.transactionId, selectedUser));
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500) {
+        forgetRequest();
+        setAdjustError(cause.message);
+      } else {
+        setAdjustError("The adjustment was not confirmed. Retry the same amount, account and reason to check its receipt.");
+      }
     } finally {
+      adjustmentBusy.current = false;
       setAdjustLoading(false);
     }
   };
+
+  async function undoAdjustment(transactionId: string, account: User) {
+    if (undoing) return;
+    setUndoing(transactionId);
+    try {
+      await apiRequest(`/api/admin/wallet/adjust/${transactionId}/undo`, "POST", null, true);
+      toast("Adjustment reversed.", "success");
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "Could not confirm the reversal. Check the receipt and retry.", "error");
+    } finally {
+      if (activeWallet.current === account._id) void selectUser(account);
+      void fetchStats();
+      setUndoing("");
+    }
+  }
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
@@ -437,7 +474,7 @@ export default function AdminWalletPage() {
         )}
 
         {/* PATCH_80: Pending Topups Section */}
-        {pendingTopups.length > 0 && (
+        {(
           <div className="bg-slate-900 rounded-xl border border-amber-500/50 mb-8">
             <div className="p-4 border-b border-amber-500/30 bg-amber-500/10 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -447,13 +484,13 @@ export default function AdminWalletPage() {
                 </h2>
               </div>
               <span className="bg-amber-500 text-black text-xs font-bold px-2 py-1 rounded-full">
-                {pendingTopups.length} Pending
+                {pendingError ? "Unavailable" : pendingTotal + " Pending"}
               </span>
             </div>
             <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
-              {pendingLoading ? (
+              {pendingError ? <p role="alert">{pendingError} <button className="underline" onClick={fetchPendingTopups}>Reload transfers</button></p> : pendingLoading ? (
                 <p className="text-slate-400 text-center py-4">Loading...</p>
-              ) : (
+              ) : pendingTopups.length === 0 ? <p className="text-slate-400">No transfers awaiting review.</p> : (
                 pendingTopups.map((topup) => (
                   <div
                     key={topup._id}
@@ -499,6 +536,18 @@ export default function AdminWalletPage() {
                         </span>
                       </div>
                     </div>
+                    {topup.methodName && <p className="mt-2 text-sm text-slate-200">Funding method: {topup.methodName}</p>}
+                    {topup.paymentReference && <p className="mt-1 break-all text-sm text-slate-300">Submitted transfer reference: {topup.paymentReference}</p>}
+                    {(!topup.provider || ["manual", "internal"].includes(topup.provider)) && (
+                      <label className="mt-3 block text-sm text-slate-300">
+                        Verified payment reference
+                        <input type="text" autoComplete="off" maxLength={80}
+                          value={settlementReferences[topup._id] || ""}
+                          onChange={event => setSettlementReferences(current => ({ ...current, [topup._id]: event.target.value }))}
+                          className="mt-1 block w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 text-white" />
+                        <span className="mt-1 block text-xs">Match the payer and amount to the payment record before approving.</span>
+                      </label>
+                    )}
                     <div className="mt-3 flex gap-2 justify-end">
                       <button
                         onClick={() => handleVerifyTopup(topup._id, "reject")}
@@ -509,7 +558,8 @@ export default function AdminWalletPage() {
                       </button>
                       <button
                         onClick={() => handleVerifyTopup(topup._id, "approve")}
-                        disabled={verifyingId === topup._id}
+                        disabled={Boolean(verifyingId) || !/^[a-z0-9][a-z0-9._/-]{3,79}$/i.test(settlementReferences[topup._id]?.trim() || "") ||
+                          Boolean(topup.paymentReference && topup.paymentReference !== settlementReferences[topup._id]?.trim().toUpperCase())}
                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
                       >
                         {verifyingId === topup._id ? "..." : "✓ Approve"}
@@ -519,11 +569,16 @@ export default function AdminWalletPage() {
                 ))
               )}
             </div>
+            {pendingPages > 1 && <nav aria-label="Pending transfer pages" className="flex items-center justify-between p-4">
+              <button disabled={pendingLoading || pendingPage <= 1} className="underline disabled:opacity-40" onClick={() => setPendingPage(page => page - 1)}>Previous transfers</button>
+              <span>Page {pendingPage} of {pendingPages}</span>
+              <button disabled={pendingLoading || pendingPage >= pendingPages} className="underline disabled:opacity-40" onClick={() => setPendingPage(page => page + 1)}>Next transfers</button>
+            </nav>}
           </div>
         )}
 
         {/* PATCH_115: Withdrawal Requests Section */}
-        <div className="bg-slate-900 rounded-xl border border-slate-800 mb-8">
+        <div id="withdrawal-requests" className="bg-slate-900 rounded-xl border border-slate-800 mb-8">
           <div className="p-4 border-b border-slate-800 bg-slate-850 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-blue-400 text-xl">💸</span>
@@ -534,7 +589,7 @@ export default function AdminWalletPage() {
             <div className="flex items-center gap-2">
               <span className="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded-full">
                 {withdrawals.filter((w) => w.status === "pending").length}{" "}
-                Pending
+                Pending on this page
               </span>
             </div>
           </div>
@@ -547,7 +602,7 @@ export default function AdminWalletPage() {
                   key={status}
                   onClick={() => {
                     setWithdrawalFilter(status);
-                    setWithdrawalLoading(true);
+                    setWithdrawalCursors([]);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
                     withdrawalFilter === status
@@ -575,6 +630,8 @@ export default function AdminWalletPage() {
                   </div>
                 ))}
               </div>
+            ) : withdrawalError ? (
+              <p role="alert">Withdrawals could not be loaded. <button className="underline" onClick={fetchWithdrawals}>Retry</button></p>
             ) : withdrawals.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-slate-400 text-sm">
@@ -592,10 +649,10 @@ export default function AdminWalletPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-medium text-white">
-                          {withdrawal.userId.name}
+                          {withdrawal.userId?.name ?? "Archived account"}
                         </p>
                         <p className="text-sm text-slate-400">
-                          {withdrawal.userId.email}
+                          {withdrawal.userId?.email}
                         </p>
                       </div>
                       <div className="text-right">
@@ -690,6 +747,11 @@ export default function AdminWalletPage() {
           </div>
         </div>
 
+        {(withdrawalCursors.length > 0 || nextWithdrawalCursor) && <nav aria-label="Withdrawal pages" className="mb-6 flex items-center gap-4">
+          <button className="underline disabled:opacity-50" disabled={!withdrawalCursors.length || withdrawalLoading} onClick={() => setWithdrawalCursors(values => values.slice(0, -1))}>Newer withdrawals</button>
+          <span>Page {withdrawalCursors.length + 1}</span>
+          <button className="underline disabled:opacity-50" disabled={!nextWithdrawalCursor || withdrawalLoading} onClick={() => { if (nextWithdrawalCursor) setWithdrawalCursors(values => [...values, nextWithdrawalCursor]); }}>Older withdrawals</button>
+        </nav>}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Search Panel */}
           <div className="bg-slate-900 rounded-xl border border-slate-800">
@@ -804,7 +866,7 @@ export default function AdminWalletPage() {
                     ${(selectedUser.walletBalance || 0).toFixed(2)}
                   </p>
                   <button
-                    onClick={() => setShowAdjust(true)}
+                    onClick={() => { setAdjustError(""); setShowAdjust(true); }}
                     className="mt-3 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm"
                   >
                     Adjust Balance
@@ -834,9 +896,17 @@ export default function AdminWalletPage() {
                           <p className="text-sm font-medium">
                             {getSourceLabel(tx.source)}
                           </p>
+                          {tx.methodName && <p className="text-xs text-slate-300">Funding method: {tx.methodName}</p>}
+                          {tx.paymentReference && <p className="break-all text-xs text-slate-300">Submitted transfer reference: {tx.paymentReference}</p>}
+                          {tx.settlementReference && <p className="break-all text-xs text-slate-300">Payment reference: {tx.settlementReference}</p>}
                           <p className="text-xs text-slate-500">
                             {new Date(tx.createdAt).toLocaleString()}
                           </p>
+                          {tx.canUndo && <button type="button" disabled={!!undoing} className="mt-1 text-sm text-teal-300 underline"
+                            onClick={() => { if (window.confirm(`Reverse this $${tx.amount.toFixed(2)} ${tx.type} for ${selectedUser.email}?`)) void undoAdjustment(tx._id, selectedUser); }}>
+                            {undoing === tx._id ? "Reversing…" : "Reverse adjustment"}
+                          </button>}
+                          {tx.undoTransactionId && <p className="mt-1 break-all text-xs text-slate-300">Reversed · Receipt {tx.undoTransactionId}</p>}
                         </div>
                         <p
                           className={`font-semibold ${
@@ -894,7 +964,7 @@ export default function AdminWalletPage() {
               {/* Type Selection */}
               <div className="flex gap-2 mb-4">
                 <button
-                  onClick={() => setAdjustType("credit")}
+                  disabled={adjustLoading} aria-pressed={adjustType === "credit"} onClick={() => setAdjustType("credit")}
                   className={`flex-1 py-2 rounded-lg border ${
                     adjustType === "credit"
                       ? "bg-emerald-600 border-emerald-500"
@@ -904,7 +974,7 @@ export default function AdminWalletPage() {
                   + Credit
                 </button>
                 <button
-                  onClick={() => setAdjustType("debit")}
+                  disabled={adjustLoading} aria-pressed={adjustType === "debit"} onClick={() => setAdjustType("debit")}
                   className={`flex-1 py-2 rounded-lg border ${
                     adjustType === "debit"
                       ? "bg-red-600 border-red-500"
@@ -916,13 +986,14 @@ export default function AdminWalletPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm text-slate-300 mb-2">
+                <label htmlFor="adjustment-amount" className="block text-sm text-slate-300 mb-2">
                   Amount ($)
                 </label>
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
+                  id="adjustment-amount" disabled={adjustLoading}
                   value={adjustAmount}
                   onChange={(e) => setAdjustAmount(e.target.value)}
                   placeholder="Enter amount"
@@ -931,11 +1002,12 @@ export default function AdminWalletPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm text-slate-300 mb-2">
+                <label htmlFor="adjustment-reason" className="block text-sm text-slate-300 mb-2">
                   Reason (Required)
                 </label>
                 <input
                   type="text"
+                  id="adjustment-reason" disabled={adjustLoading}
                   value={adjustDescription}
                   onChange={(e) => setAdjustDescription(e.target.value)}
                   placeholder="Why are you making this adjustment?"
@@ -989,7 +1061,7 @@ export default function AdminWalletPage() {
               )}
 
               <div className="flex gap-3">
-                <button
+                <button disabled={adjustLoading}
                   onClick={() => {
                     setShowAdjust(false);
                     setAdjustAmount("");
@@ -1015,6 +1087,7 @@ export default function AdminWalletPage() {
                       : "Confirm Debit"}
                 </button>
               </div>
+              {adjustError && <p role="alert" className="mt-3 text-sm text-amber-200">{adjustError}</p>}
               {!adjustDescription.trim() && (
                 <p className="text-xs text-amber-400 mt-2 text-center">
                   ⚠️ Reason is required for audit trail

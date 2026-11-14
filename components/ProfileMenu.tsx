@@ -97,12 +97,12 @@ export default function ProfileMenu() {
 
             <Link
               role="menuitem"
-              href="/apply-to-work"
+              href="/profile#project-access"
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-200 hover:bg-white/5 transition-colors"
             >
               <span className="text-base">Work</span>
-              Apply to Work
+              My project access
             </Link>
 
             <Link
@@ -126,6 +126,10 @@ export default function ProfileMenu() {
                 >
                   <span className="text-base">Admin</span>
                   Admin Panel
+                </Link>
+                <Link role="menuitem" href="/admin/work-positions" onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-amber-300 hover:bg-amber-500/10">
+                  Manage roles
                 </Link>
               </>
             )}

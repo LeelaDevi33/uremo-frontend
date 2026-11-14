@@ -1,5 +1,7 @@
 # UREMO Platform Architecture
 
+This is the June 2025 architecture record. The current marketplace opens at `/open-roles`, `/projects/rent` and `/projects/full-access`. Workers apply for specializations, qualified workers can rent matching projects, and any signed-in buyer can acquire exclusive access to a project. Acquired projects appear in the holder’s profile.
+
 > **Version:** 1.0  
 > **Last Updated:** June 2025  
 > **Status:** Production Ready (Post-PATCH_27)

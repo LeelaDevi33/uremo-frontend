@@ -7,7 +7,17 @@ export type FaqItem = { q: string; a: string };
 export type TitleDesc = { title: string; desc: string };
 export type IconTitleDesc = { icon: string; title: string; desc: string };
 
+export const marketplaceDefaults = {
+  rolesTitle: "Open roles",
+  rolesIntro: "Find a specialization that fits your skills. Apply for free to qualify for matching projects.",
+  rentTitle: "Rent projects",
+  rentIntro: "Rent a specific project for a fixed term after qualifying for its specialization.",
+  buyTitle: "Full Access projects",
+  buyIntro: "Get permanent, exclusive access to a specific project with one payment. Anyone can purchase.",
+};
+
 export type PublicSiteSettings = {
+  marketplace: typeof marketplaceDefaults;
   nav: {
     guestPrimaryCtaText: string;
     guestSecondaryCtaText: string;
@@ -302,6 +312,7 @@ export type PublicSiteSettings = {
 };
 
 export const DEFAULT_PUBLIC_SITE_SETTINGS: PublicSiteSettings = {
+  marketplace: marketplaceDefaults,
   nav: {
     guestPrimaryCtaText: "Get Started",
     guestSecondaryCtaText: "Browse Services",
@@ -320,7 +331,7 @@ export const DEFAULT_PUBLIC_SITE_SETTINGS: PublicSiteSettings = {
   },
   support: {
     whatsappNumber: "",
-    supportEmail: "support@uremo.online",
+    supportEmail: "",
   },
   footer: {
     disclaimer:
@@ -786,6 +797,11 @@ const normalizeStringArray = (value: unknown, maxItems = 10): string[] => {
 };
 
 const mergeWithDefaults = (input: any): PublicSiteSettings => {
+  const marketplace = { ...marketplaceDefaults };
+  for (const key of Object.keys(marketplace) as (keyof typeof marketplace)[]) {
+    const value = input?.marketplace?.[key];
+    if (typeof value === "string" && value.trim()) marketplace[key] = value.trim();
+  }
   // v2 structure
   const navGuestPrimary = String(input?.nav?.guestPrimaryCtaText || "").trim();
   const navGuestSecondary = String(input?.nav?.guestSecondaryCtaText || "").trim();
@@ -1139,6 +1155,7 @@ const mergeWithDefaults = (input: any): PublicSiteSettings => {
   };
 
   const merged: PublicSiteSettings = {
+    marketplace,
     nav: {
       guestPrimaryCtaText:
         navGuestPrimary || DEFAULT_PUBLIC_SITE_SETTINGS.nav.guestPrimaryCtaText,

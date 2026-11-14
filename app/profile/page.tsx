@@ -6,7 +6,11 @@
  */
 
 import { motion } from "framer-motion";
+import { ProjectAccessRecords } from "@/components/opportunities/OpportunityAccess";
+import market from "@/components/opportunities/market.module.css";
 import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/api";
+import { useOpportunityData } from "@/components/opportunities/useOpportunityData";
 import { EmojiAccount } from "@/components/ui/Emoji";
 import { useToast } from "@/hooks/useToast";
 import { useState, useEffect } from "react";
@@ -174,75 +178,62 @@ const IconSparkle = () => (
 );
 
 const INTEREST_OPTIONS = [
-  { id: "microjobs", label: "Micro Jobs", icon: "Work" },
-  { id: "forex", label: "Forex Trading", icon: "FX" },
-  { id: "wallets", label: "Digital Wallets", icon: "Pay" },
-  { id: "crypto", label: "Cryptocurrency", icon: "₿" },
-  { id: "rentals", label: "Rentals", icon: "Rent" },
+  { id: "microjobs", label: "Open roles", icon: "Work" },
+  { id: "rentals", label: "Project rentals", icon: "Rent" },
+  { id: "project_purchase", label: "Exclusive projects", icon: "Buy" },
 ];
 
+type Account = { email?: string; role?: string; name?: string; createdAt?: string };
+const defaultPreferences = {
+  productUpdates: true,
+  jobAlerts: true,
+  dealAlerts: true,
+  rentalAlerts: true,
+  marketing: false,
+};
+
+type PreferencesResponse = {
+  success: boolean;
+  data: { emailPreferences: Partial<typeof defaultPreferences>; interestTags: string[] };
+};
+
 export default function ProfilePage() {
-  const { user, isAuthenticated, ready } = useAuth();
+  const { user, token } = useAuth();
+  return token ? <AccountProfile key={token} token={token} session={user} /> : <p role="status">Checking sign-in…</p>;
+}
+
+function AccountProfile({ token, session }: { token: string; session: Account | null }) {
+  const [selectedGrant, setSelectedGrant] = useState<string>();
+  useEffect(() => { setSelectedGrant(new URLSearchParams(window.location.search).get("grant") || undefined); }, []);
   const { toast } = useToast();
-  const [emailPreferences, setEmailPreferences] = useState({
-    productUpdates: true,
-    jobAlerts: true,
-    dealAlerts: true,
-    rentalAlerts: true,
-    marketing: false,
-  });
+  const { state: identity, reload: reloadIdentity } = useOpportunityData<{ user: Account }>("/api/auth/me", token);
+  const account = identity.phase === "loaded" && identity.data.user ? identity.data.user : session;
+  const email = account?.email || "";
+  const name = account?.name || email || "Your account";
+  const role = account?.role || "Member";
+  const createdAt = account?.createdAt && Number.isFinite(Date.parse(account.createdAt)) ? new Date(account.createdAt) : null;
+  const [emailPreferences, setEmailPreferences] = useState(defaultPreferences);
   const [interestTags, setInterestTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [prefsPhase, setPrefsPhase] = useState<"loading" | "loaded" | "error">("loading");
+  const [attempt, setAttempt] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  const email = String(user?.email || "").trim();
-  const name = (user as any)?.name || email.split("@")[0] || "User";
-  const role = String(user?.role || "user").trim();
-  const createdAt = (user as any)?.createdAt
-    ? new Date((user as any).createdAt)
-    : null;
-
-  // Calculate profile completion
-  const getProfileCompletion = () => {
-    let score = 0;
-    if (email) score += 25;
-    if ((user as any)?.name) score += 25;
-    if (interestTags.length > 0) score += 25;
-    if (prefsLoaded) score += 25;
-    return score;
-  };
-
   useEffect(() => {
-    if (isAuthenticated && !prefsLoaded) {
-      loadPreferences();
-    }
-  }, [isAuthenticated, prefsLoaded]);
-
-  const loadPreferences = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "https://uremo-backend.onrender.com"}/api/users/preferences`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setEmailPreferences(data.data.emailPreferences);
-          setInterestTags(data.data.interestTags);
-          setPrefsLoaded(true);
+    let current = true;
+    apiRequest<PreferencesResponse>("/api/users/preferences", "GET", null, true)
+      .then(result => {
+        if (!current) return;
+        if (!result?.success || !result.data?.emailPreferences || !Array.isArray(result.data.interestTags)) {
+          throw new Error("Preferences unavailable");
         }
-      }
-    } catch (error) {
-      console.error("Failed to load preferences:", error);
-    }
-  };
+        setEmailPreferences({ ...defaultPreferences, ...result.data.emailPreferences });
+        setInterestTags(result.data.interestTags);
+        setPrefsPhase("loaded");
+      })
+      .catch(() => { if (current) setPrefsPhase("error"); });
+    return () => { current = false; };
+  }, [attempt]);
 
   const copyEmail = async () => {
     if (!email) return;
@@ -264,98 +255,24 @@ export default function ProfilePage() {
   };
 
   const toggleInterest = (tag: string) => {
-    if (interestTags.length >= 10 && !interestTags.includes(tag)) {
-      toast("Maximum 10 interests allowed", "error");
-      return;
-    }
     setInterestTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
   };
 
   const savePreferences = async () => {
+    if (loading || prefsPhase !== "loaded") return;
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        toast("Not authenticated", "error");
-        return;
-      }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "https://uremo-backend.onrender.com"}/api/users/preferences`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            emailPreferences,
-            interestTags,
-          }),
-        },
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          toast("Preferences saved successfully!", "success");
-        }
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        toast(errorData.message || "Failed to update preferences", "error");
-      }
+      const result = await apiRequest<PreferencesResponse>("/api/users/preferences", "PUT", { emailPreferences, interestTags }, true);
+      if (!result?.success) throw new Error("Could not save preferences.");
+      toast("Preferences saved.", "success");
     } catch (error) {
-      console.error("Error saving preferences:", error);
-      toast("Error saving preferences", "error");
+      toast(error instanceof Error ? error.message : "Could not save preferences.", "error");
     } finally {
       setLoading(false);
     }
   };
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <div className="w-12 h-12 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Loading your profile...</p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-900 rounded-2xl p-8 text-center max-w-md border border-slate-800"
-        >
-          <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-            <IconUser />
-          </div>
-          <h2 className="text-xl font-bold mb-2">Not Logged In</h2>
-          <p className="text-slate-400 mb-6">
-            Please log in to view your profile.
-          </p>
-          <Link
-            href="/login"
-            className="inline-block bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-medium transition-colors"
-          >
-            Log In
-          </Link>
-        </motion.div>
-      </div>
-    );
-  }
-
-  const completion = getProfileCompletion();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -408,15 +325,15 @@ export default function ProfilePage() {
               {name.charAt(0).toUpperCase()}
             </div>
 
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <h2 className="text-2xl font-bold">{name}</h2>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-3 mb-1">
+                <h2 className="break-all text-2xl font-bold">{name}</h2>
                 <span className="inline-flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded-full text-xs font-medium capitalize">
                   <IconBadge />
                   {role}
                 </span>
               </div>
-              <p className="text-indigo-100">{email}</p>
+              <p className="break-all text-indigo-100">{email}</p>
               {createdAt && (
                 <div className="flex items-center gap-2 mt-2 text-indigo-200 text-sm">
                   <IconCalendar />
@@ -431,23 +348,15 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Profile Completion */}
-            <div className="sm:text-right">
-              <p className="text-xs text-indigo-200 mb-1">Profile Completion</p>
-              <div className="flex items-center gap-2">
-                <div className="w-24 h-2 bg-white/20 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${completion}%` }}
-                    transition={{ delay: 0.5, duration: 0.8 }}
-                    className="h-full bg-white rounded-full"
-                  />
-                </div>
-                <span className="text-sm font-bold">{completion}%</span>
-              </div>
-            </div>
           </div>
         </motion.div>
+
+        {token && <section id="project-access" aria-labelledby="profile-project-title" className={`${market.library} scroll-mt-24`}>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 id="profile-project-title" className="text-2xl font-semibold">My project access</h2><Link href="/opportunities/access" className="text-teal-300 underline">Access history</Link>
+          </div>
+          <ProjectAccessRecords key={token + (selectedGrant || "")} token={token} selectedGrant={selectedGrant} />
+        </section>}
 
         {/* ===== ACCOUNT INFO ===== */}
         <motion.div
@@ -465,14 +374,14 @@ export default function ProfilePage() {
 
           <div className="space-y-4">
             {/* Email */}
-            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-800/50 rounded-xl">
+              <div className="flex min-w-0 items-center gap-3">
                 <IconMail />
                 <div>
                   <p className="text-xs text-slate-400 uppercase tracking-wide">
                     Email Address
                   </p>
-                  <p className="font-medium">{email}</p>
+                  <p className="break-all font-medium">{email}</p>
                 </div>
               </div>
               <button
@@ -489,7 +398,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Role */}
-            <div className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-800/50 rounded-xl">
               <div className="flex items-center gap-3">
                 <IconShield />
                 <div>
@@ -499,14 +408,18 @@ export default function ProfilePage() {
                   <p className="font-medium capitalize">{role}</p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full text-sm font-medium">
-                <IconCheck />
-                Verified
-              </span>
             </div>
           </div>
         </motion.div>
 
+        {identity.phase === "error" && <p role="alert" className="mb-4 text-amber-200">
+          Account details could not be refreshed. <button type="button" className="underline" onClick={reloadIdentity}>Retry account details</button>
+        </p>}
+        {prefsPhase !== "loaded" && <p role="status" className="mb-4 text-slate-200">
+          {prefsPhase === "loading" ? "Loading your preferences…" : <>Your preferences could not be loaded. <button type="button" className="underline" onClick={() => { setPrefsPhase("loading"); setAttempt(value => value + 1); }}>Retry preferences</button></>}
+        </p>}
+        <fieldset disabled={loading || prefsPhase !== "loaded"} className="min-w-0">
+          <legend className="sr-only">Account preferences</legend>
         {/* ===== EMAIL PREFERENCES ===== */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -556,7 +469,7 @@ export default function ProfilePage() {
             ].map(({ key, label, desc }) => (
               <label
                 key={key}
-                className="flex items-center justify-between p-4 bg-slate-800/50 rounded-xl cursor-pointer hover:bg-slate-800/70 transition-colors"
+                className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-800/50 rounded-xl cursor-pointer hover:bg-slate-800/70 transition-colors"
               >
                 <div>
                   <p className="font-medium">{label}</p>
@@ -569,7 +482,7 @@ export default function ProfilePage() {
                     onChange={() => toggleEmailPreference(key)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                  <div className="w-11 h-6 bg-slate-700 peer-focus-visible:ring-2 peer-focus-visible:ring-white rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                 </div>
               </label>
             ))}
@@ -590,15 +503,16 @@ export default function ProfilePage() {
             <div>
               <h3 className="text-lg font-semibold">Your Interests</h3>
               <p className="text-sm text-slate-400">
-                Select topics to get personalized recommendations
+                Choose the project opportunities you are interested in.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {INTEREST_OPTIONS.map((interest) => (
               <button
                 key={interest.id}
+                aria-pressed={interestTags.includes(interest.id)}
                 onClick={() => toggleInterest(interest.id)}
                 className={`flex items-center gap-3 p-4 rounded-xl transition-all ${
                   interestTags.includes(interest.id)
@@ -614,16 +528,18 @@ export default function ProfilePage() {
           </div>
 
           <p className="mt-4 text-xs text-slate-500 text-center">
-            {interestTags.length}/10 interests selected
+            {interestTags.length} of {INTEREST_OPTIONS.length} interests selected
           </p>
         </motion.div>
+
+        </fieldset>
 
         {/* ===== SAVE BUTTON ===== */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="flex justify-end gap-4"
+          className="flex flex-wrap justify-end gap-4"
         >
           <Link
             href="/dashboard"
@@ -633,7 +549,7 @@ export default function ProfilePage() {
           </Link>
           <button
             onClick={savePreferences}
-            disabled={loading}
+            disabled={loading || prefsPhase !== "loaded"}
             className="flex items-center gap-2 px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25 hover:shadow-xl hover:shadow-indigo-500/30 hover:-translate-y-0.5"
           >
             {loading ? (
@@ -650,18 +566,6 @@ export default function ProfilePage() {
           </button>
         </motion.div>
 
-        {/* ===== FOOTER SECURITY ===== */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 text-center text-xs text-slate-500"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <IconShield />
-            <span>Your data is encrypted and securely stored</span>
-          </div>
-        </motion.div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
@@ -74,7 +74,8 @@ function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [token, setToken] = useState("");
+  const token = searchParams.get("token");
+  const [expired, setExpired] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,13 +86,6 @@ function ResetPasswordForm() {
     password?: string;
     confirmPassword?: string;
   }>({});
-
-  useEffect(() => {
-    const tokenParam = searchParams.get("token");
-    if (tokenParam) {
-      setToken(tokenParam);
-    }
-  }, [searchParams]);
 
   // PATCH_54: Password strength validation
   const passwordStrength = PASSWORD_RULES.map((rule) => ({
@@ -120,6 +114,7 @@ function ResetPasswordForm() {
   };
 
   const submit = async () => {
+    if (loading) return;
     setErrors({});
 
     if (!token) {
@@ -145,6 +140,7 @@ function ResetPasswordForm() {
       const code = err.payload?.code;
 
       if (code === "INVALID_TOKEN") {
+        setExpired(true);
         toast(
           "This reset link is invalid or has expired. Please request a new one.",
           "error",
@@ -164,14 +160,7 @@ function ResetPasswordForm() {
     }
   };
 
-  // PATCH_54: Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      submit();
-    }
-  };
-
-  if (!token) {
+  if (!token || expired) {
     return (
       <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800 text-center">
         <div className="mb-4 text-4xl">!</div>
@@ -211,7 +200,7 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
+    <form noValidate onSubmit={event => { event.preventDefault(); void submit(); }} className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
       <h1 className="text-xl font-semibold mb-2 text-white">Reset Password</h1>
       <p className="text-slate-400 text-sm mb-4">
         Enter your new password below.
@@ -219,7 +208,7 @@ function ResetPasswordForm() {
 
       {/* PATCH_54: Password with visibility toggle */}
       <div className="mb-3">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="new-password" className="block text-sm font-medium mb-1 text-slate-300">
           New Password
         </label>
         <div className="relative">
@@ -228,6 +217,9 @@ function ResetPasswordForm() {
               errors.password ? "border-red-500" : "border-slate-600"
             }`}
             type={showPassword ? "text" : "password"}
+            id="new-password"
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? "new-password-error" : undefined}
             placeholder="New Password"
             value={password}
             onChange={(e) => {
@@ -235,7 +227,6 @@ function ResetPasswordForm() {
               if (errors.password)
                 setErrors((prev) => ({ ...prev, password: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="new-password"
           />
@@ -243,14 +234,13 @@ function ResetPasswordForm() {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            tabIndex={-1}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         </div>
         {errors.password && (
-          <p className="text-red-400 text-xs mt-1">{errors.password}</p>
+          <p role="alert" id="new-password-error" className="text-red-400 text-xs mt-1">{errors.password}</p>
         )}
 
         {/* PATCH_54: Password strength indicator */}
@@ -276,7 +266,7 @@ function ResetPasswordForm() {
 
       {/* PATCH_54: Confirm password with visibility toggle */}
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="confirm-password" className="block text-sm font-medium mb-1 text-slate-300">
           Confirm Password
         </label>
         <div className="relative">
@@ -285,6 +275,9 @@ function ResetPasswordForm() {
               errors.confirmPassword ? "border-red-500" : "border-slate-600"
             }`}
             type={showConfirmPassword ? "text" : "password"}
+            id="confirm-password"
+            aria-invalid={Boolean(errors.confirmPassword)}
+            aria-describedby={errors.confirmPassword ? "confirm-password-error" : undefined}
             placeholder="Confirm Password"
             value={confirmPassword}
             onChange={(e) => {
@@ -292,7 +285,6 @@ function ResetPasswordForm() {
               if (errors.confirmPassword)
                 setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="new-password"
           />
@@ -300,19 +292,18 @@ function ResetPasswordForm() {
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            tabIndex={-1}
-            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
           >
             {showConfirmPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         </div>
         {errors.confirmPassword && (
-          <p className="text-red-400 text-xs mt-1">{errors.confirmPassword}</p>
+          <p role="alert" id="confirm-password-error" className="text-red-400 text-xs mt-1">{errors.confirmPassword}</p>
         )}
       </div>
 
       <button
-        onClick={submit}
+        type="submit"
         disabled={loading}
         className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
@@ -325,7 +316,7 @@ function ResetPasswordForm() {
           Login
         </a>
       </p>
-    </div>
+    </form>
   );
 }
 

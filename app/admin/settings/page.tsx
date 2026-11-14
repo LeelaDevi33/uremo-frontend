@@ -7,11 +7,14 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
   markSiteSettingsUpdated,
+  marketplaceDefaults,
   type FaqItem,
   type TitleDesc,
 } from "@/hooks/useSiteSettings";
 
 type AdminSettingsDoc = {
+  revision?: string;
+  marketplace?: Partial<typeof marketplaceDefaults>;
   _id?: string;
   singletonKey?: string;
   // Legacy fallback (older backend stored bannerText at root)
@@ -111,9 +114,13 @@ export default function AdminCmsSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState<string | null>(null);
+  const [rawRevision, setRawRevision] = useState<string | null>(null);
+  const [marketplace, setMarketplace] = useState(marketplaceDefaults);
 
   const [tab, setTab] = useState<
     | "global"
+    | "marketplace"
     | "landing"
     | "payment"
     | "services"
@@ -189,6 +196,7 @@ export default function AdminCmsSettingsPage() {
   const load = async () => {
     setLoading(true);
     setError(null);
+    setRevision(null);
     try {
       const doc = await apiRequest<AdminSettingsDoc>(
         "/api/admin/settings",
@@ -197,6 +205,14 @@ export default function AdminCmsSettingsPage() {
         true
       );
 
+      if (!doc.revision) throw new Error("The settings service has changed. Refresh before editing.");
+      setRevision(doc.revision);
+      const copy = { ...marketplaceDefaults };
+      for (const key of Object.keys(copy) as (keyof typeof copy)[]) {
+        const value = doc.marketplace?.[key];
+        if (typeof value === "string" && value.trim()) copy[key] = value;
+      }
+      setMarketplace(copy);
       setBrandName(String(doc?.site?.brandName || ""));
       setBannerText(String(doc?.site?.bannerText || doc?.bannerText || ""));
       setWhatsappNumber(String(doc?.support?.whatsappNumber || ""));
@@ -309,7 +325,8 @@ export default function AdminCmsSettingsPage() {
   const tabs = useMemo(() => {
     const base = [
       { key: "global" as const, label: "Global" },
-      { key: "landing" as const, label: "Landing" },
+      { key: "marketplace" as const, label: "Marketplace pages" },
+      { key: "landing" as const, label: "Legacy landing copy" },
       { key: "payment" as const, label: "Payment" },
       { key: "services" as const, label: "Services" },
       { key: "orderSupport" as const, label: "Order Support" },
@@ -351,12 +368,14 @@ export default function AdminCmsSettingsPage() {
   const loadRawFromServer = async () => {
     setRawBusy(true);
     try {
-      const resp = await apiRequest<{ settings: any }>(
+      const resp = await apiRequest<{ settings: unknown; revision: string }>(
         "/api/admin/settings/raw",
         "GET",
         null,
         true
       );
+      setRawRevision(resp.revision);
+      setConfirmReplace(false);
       setRawJsonText(JSON.stringify(resp?.settings ?? {}, null, 2));
       toast("Loaded settings JSON", "success");
     } catch (e: any) {
@@ -413,6 +432,7 @@ export default function AdminCmsSettingsPage() {
   };
 
   const saveRawJson = async (mode: "merge" | "replace") => {
+    if (!revision) return;
     const result = parseJsonWithLocation(rawJsonText);
     if (!result.ok) {
       const loc =
@@ -433,11 +453,13 @@ export default function AdminCmsSettingsPage() {
       await apiRequest(
         "/api/admin/settings/raw",
         "PUT",
-        { mode, settings: result.value },
+        { mode, settings: result.value, expectedRevision: rawRevision || revision },
         true
       );
       toast("Settings updated", "success");
       setConfirmReplace(false);
+      setRawRevision(null);
+      setRawJsonText("");
 
       // Force refresh settings in this browser/session.
       markSiteSettingsUpdated();
@@ -451,7 +473,7 @@ export default function AdminCmsSettingsPage() {
       if (process.env.NODE_ENV !== "production") {
         console.error("[cms advanced] save raw failed", e);
       }
-      toast("Save failed", "error");
+      toast(e?.message || "Save failed", "error");
     } finally {
       setRawBusy(false);
     }
@@ -483,10 +505,13 @@ export default function AdminCmsSettingsPage() {
   };
 
   const save = async () => {
+    if (!revision || saving) return;
     setSaving(true);
     setError(null);
     try {
       const payload = {
+        expectedRevision: revision,
+        marketplace,
         site: {
           brandName: brandName.trim(),
           bannerText: bannerText.trim(),
@@ -559,6 +584,7 @@ export default function AdminCmsSettingsPage() {
       };
 
       await apiRequest("/api/admin/settings", "PUT", payload, true);
+      markSiteSettingsUpdated();
       toast("CMS settings saved", "success");
       await load();
     } catch (e: any) {
@@ -585,7 +611,7 @@ export default function AdminCmsSettingsPage() {
         <button
           type="button"
           onClick={save}
-          disabled={saving}
+          disabled={saving || !revision || tab === "advanced"}
           className="btn-primary w-full sm:w-auto disabled:opacity-60"
         >
           {saving ? "Saving…" : "Save"}
@@ -593,8 +619,8 @@ export default function AdminCmsSettingsPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-          {error}
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
+          {error} <button type="button" onClick={load} className="ml-2 underline">Reload settings</button>
         </div>
       )}
 
@@ -662,14 +688,33 @@ export default function AdminCmsSettingsPage() {
               className="u-input mt-2"
               value={supportEmail}
               onChange={(e) => setSupportEmail(e.target.value)}
-              placeholder="support@uremo.online"
+              placeholder="Support inbox (optional)"
             />
           </div>
         </div>
       )}
 
+      {tab === "marketplace" && <div className="space-y-4">
+        {([
+          ["roles", "Open roles", "/open-roles"],
+          ["rent", "Rent projects", "/projects/rent"],
+          ["buy", "Full Access projects", "/projects/full-access"],
+        ] as const).map(([key, label, href]) => <section key={key} className="card space-y-3">
+          <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold">{label}</h2>
+            <a className="text-sm underline" href={href} target="_blank" rel="noreferrer">View page</a></div>
+          <label className="block text-sm">Page heading
+            <input className="u-input mt-1" maxLength={100} value={marketplace[`${key}Title`]}
+              onChange={event => setMarketplace(current => ({ ...current, [`${key}Title`]: event.target.value }))} />
+          </label>
+          <label className="block text-sm">Introduction
+            <textarea className="u-input mt-1" maxLength={300} rows={3} value={marketplace[`${key}Intro`]}
+              onChange={event => setMarketplace(current => ({ ...current, [`${key}Intro`]: event.target.value }))} />
+          </label>
+        </section>)}
+      </div>}
       {tab === "landing" && (
         <div className="space-y-6">
+          <p className="text-sm text-slate-300">These fields preserve the former service storefront. Edit the current homepage in Marketplace pages.</p>
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="card">
               <h2 className="font-semibold">Hero</h2>
@@ -716,7 +761,7 @@ export default function AdminCmsSettingsPage() {
 
           <TitleDescEditor
             title="Feature cards"
-            hint="Shown on the landing page. Max 8 items. Empty rows are ignored on save."
+            hint="Saved with the legacy storefront copy. Max 8 items."
             items={features}
             onChange={setFeatures}
           />

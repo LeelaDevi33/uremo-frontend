@@ -314,7 +314,7 @@ export default function AdminTicketViewPage() {
   };
 
   const sendReply = async () => {
-    if (!reply.trim() && attachments.length === 0) return;
+    if (!reply.trim()) return;
 
     setSending(true);
     try {
@@ -329,10 +329,7 @@ export default function AdminTicketViewPage() {
         setMessages((prev) => [...prev, res.message]);
         setReply("");
         setAttachments([]);
-        // If ticket was closed, reopen it
-        if (ticket?.status === "closed") {
-          setTicket((t) => (t ? { ...t, status: "in_progress" } : null));
-        }
+        if (res.status) setTicket((t) => (t ? { ...t, status: res.status } : null));
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }, 100);
@@ -652,7 +649,7 @@ export default function AdminTicketViewPage() {
         <textarea
           value={reply}
           onChange={(e) => setReply(e.target.value)}
-          placeholder="Type your reply to the user..."
+          placeholder="Write a reply. You can also attach files."
           rows={3}
           className="u-textarea w-full mb-3"
         />
@@ -709,7 +706,7 @@ export default function AdminTicketViewPage() {
             )}
             <button
               onClick={sendReply}
-              disabled={sending || (!reply.trim() && attachments.length === 0)}
+              disabled={sending || !reply.trim()}
               className="btn-primary disabled:opacity-50"
             >
               {sending ? "Sending..." : "Send Reply"}

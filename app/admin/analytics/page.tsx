@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/useAuth";
 import PageHeader from "@/components/ui/PageHeader";
 import { EmojiAnalytics } from "@/components/ui/Emoji";
 
+interface MoneyTotal { count: number; total: number }
+
 interface Stats {
   totalUsers: number;
   newUsersToday: number;
@@ -15,8 +17,10 @@ interface Stats {
   processingOrders: number;
   pendingOrders: number;
   ordersToday: number;
-  totalRevenue: number;
-  totalWalletVolume: number;
+  marketplace: { currency: string; buy: MoneyTotal; rent: MoneyTotal };
+  legacyByCurrency: (MoneyTotal & { currency: string })[];
+  legacyUnknown: number;
+  deposits: MoneyTotal & { currency: string };
   pendingTickets: number;
   openTickets: number;
   activeRentals: number;
@@ -99,8 +103,8 @@ export default function AdminAnalyticsPage() {
     );
   }
 
-  const formatCurrency = (val: number) =>
-    `$${(val || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  const formatCurrency = (value: number, currency = "USD") =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 py-8 px-4">
@@ -110,7 +114,7 @@ export default function AdminAnalyticsPage() {
           <PageHeader
             title="Analytics Dashboard"
             emoji={<EmojiAnalytics />}
-            description="Real-time platform metrics and health"
+            description="Project receipts, settled legacy payments, wallet deposits and service health"
           />
           <button
             onClick={loadData}
@@ -125,6 +129,36 @@ export default function AdminAnalyticsPage() {
           <div className="p-4 bg-red-500/20 border border-red-500/30 rounded-xl text-red-300 text-sm">
             {error}
           </div>
+        )}
+
+        {stats?.marketplace && (
+          <section aria-labelledby="revenue-title" className="rounded-xl border border-emerald-400/30 bg-slate-900 p-5">
+            <h2 id="revenue-title" className="text-lg font-semibold">Marketplace revenue</h2>
+            <div className="mt-4 grid gap-5 sm:grid-cols-3">
+              <div><p className="text-sm text-slate-300">Net project revenue</p>
+                <p className="text-3xl font-bold">{formatCurrency(stats.marketplace.buy.total + stats.marketplace.rent.total)}</p>
+                <p className="text-xs text-slate-400">After project access refunds</p></div>
+              <div><p className="text-sm text-slate-300">Full Access sales</p>
+                <p className="text-xl font-semibold">{formatCurrency(stats.marketplace.buy.total)}</p>
+                <p className="text-xs text-slate-400">{stats.marketplace.buy.count} retained sales</p></div>
+              <div><p className="text-sm text-slate-300">Project rentals</p>
+                <p className="text-xl font-semibold">{formatCurrency(stats.marketplace.rent.total)}</p>
+                <p className="text-xs text-slate-400">{stats.marketplace.rent.count} retained rentals</p></div>
+            </div>
+            <div className="mt-5 grid gap-5 border-t border-white/10 pt-4 sm:grid-cols-2">
+              <div><h3 className="text-sm font-medium">Gross settled legacy order payments</h3>
+                {stats.legacyByCurrency.length ? stats.legacyByCurrency.map(row => (
+                  <p key={row.currency}>{row.currency} {formatCurrency(row.total, row.currency)} · {row.count} payments</p>
+                )) : <p className="text-sm text-slate-400">No verified legacy payments</p>}
+                {stats.legacyUnknown > 0 && <p className="mt-1 text-xs text-amber-300">
+                  {stats.legacyUnknown} historical orders lack a verified settlement amount or currency.
+                </p>}
+              </div>
+              <div><h3 className="text-sm font-medium">Settled wallet deposits</h3>
+                <p>{formatCurrency(stats.deposits.total)} · {stats.deposits.count} deposits</p>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* System Health */}
@@ -190,25 +224,11 @@ export default function AdminAnalyticsPage() {
               color="blue"
             />
             <StatCard
-              title="Total Orders"
+              title="Historical orders"
               value={stats.totalOrders}
               subtitle={`+${stats.ordersToday} today`}
               icon="📦"
               color="purple"
-            />
-            <StatCard
-              title="Revenue"
-              value={formatCurrency(stats.totalRevenue)}
-              subtitle={`${stats.completedOrders} completed`}
-              icon="💰"
-              color="green"
-            />
-            <StatCard
-              title="Wallet Volume"
-              value={formatCurrency(stats.totalWalletVolume)}
-              subtitle="Total credits"
-              icon="💳"
-              color="cyan"
             />
             <StatCard
               title="In Progress Orders"
@@ -271,7 +291,7 @@ export default function AdminAnalyticsPage() {
                 color="#8B5CF6"
               />
               <ChartCard
-                title="Revenue"
+                title="Gross settled legacy payments (USD)"
                 data={charts.revenuePerDay}
                 dataKey="total"
                 color="#10B981"
@@ -411,7 +431,7 @@ function ChartCard({
         </span>
       </div>
       <div className="flex items-end gap-1 h-24">
-        {data.slice(-14).map((d, i) => {
+        {data.map((d, i) => {
           const height = ((d[dataKey] || 0) / maxVal) * 100;
           return (
             <div
@@ -427,7 +447,7 @@ function ChartCard({
         })}
       </div>
       <div className="flex justify-between mt-2 text-[10px] text-gray-500">
-        <span>{data[Math.max(0, data.length - 14)]?._id?.slice(5) || ""}</span>
+        <span>{data[0]?._id?.slice(5) || ""}</span>
         <span>{data[data.length - 1]?._id?.slice(5) || ""}</span>
       </div>
     </div>

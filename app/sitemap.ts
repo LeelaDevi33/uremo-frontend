@@ -1,33 +1,38 @@
 import { MetadataRoute } from "next";
+import { siteOrigin } from "@/lib/siteOrigin";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: "https://uremo.online",
+      url: siteOrigin,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 1.0,
     },
     {
-      url: "https://uremo.online/avail-service",
+      url: `${siteOrigin}/open-roles`,
       lastModified: new Date(),
       changeFrequency: "weekly",
       priority: 0.9,
     },
     {
-      url: "https://uremo.online/apply-to-work",
+      url: `${siteOrigin}/projects/rent`,
+      changeFrequency: "weekly",
+    },
+    {
+      url: `${siteOrigin}/projects/full-access`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.7,
     },
     {
-      url: "https://uremo.online/login",
+      url: `${siteOrigin}/login`,
       lastModified: new Date(),
       changeFrequency: "never",
       priority: 0.5,
     },
     {
-      url: "https://uremo.online/signup",
+      url: `${siteOrigin}/signup`,
       lastModified: new Date(),
       changeFrequency: "never",
       priority: 0.5,

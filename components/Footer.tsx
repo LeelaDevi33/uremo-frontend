@@ -52,19 +52,19 @@ export default function Footer() {
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.servicesLinkText}
               </Link>
               <Link
-                href="/apply-to-work"
+                href="/open-roles"
                 className="hover:text-white transition"
               >
                 {footer.workLinkText ||
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.workLinkText}
               </Link>
-              <a
-                href={`mailto:${supportEmail}`}
+              <Link
+                href="/support"
                 className="hover:text-white transition"
               >
                 {footer.contactLinkText ||
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.contactLinkText}
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -74,7 +74,7 @@ export default function Footer() {
                 DEFAULT_PUBLIC_SITE_SETTINGS.footer.supportTitle}
             </div>
             <div className="mt-3 text-slate-300">
-              <div className="leading-relaxed">
+              {supportEmail ? <div className="leading-relaxed">
                 {footer.supportPrompt ||
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.supportPrompt}{" "}
                 <a
@@ -83,7 +83,7 @@ export default function Footer() {
                 >
                   {supportEmail}
                 </a>
-              </div>
+              </div> : <Link href="/support/tickets" className="underline">Open a support ticket</Link>}
               {support.whatsappNumber ? (
                 <div className="mt-2 text-slate-400">
                   {(footer.whatsappLabel ||

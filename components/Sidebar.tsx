@@ -10,7 +10,6 @@ import { apiRequest } from "@/lib/api";
 import {
   EmojiMarketplace,
   EmojiWorkspace,
-  EmojiDeals,
   EmojiOrders,
   EmojiWallet,
   EmojiAffiliate,
@@ -161,8 +160,8 @@ export default function Sidebar() {
   // PATCH_52 + PATCH_53: Simplified user navigation with badge support
   const links = [
     {
-      name: "Find Work & Services",
-      href: "/explore-services",
+      name: "Open roles",
+      href: "/open-roles",
       badge: 0,
       emoji: <EmojiMarketplace />,
     },
@@ -172,7 +171,9 @@ export default function Sidebar() {
       badge: 0,
       emoji: <EmojiWorkspace />,
     },
-    { name: "Deals", href: "/deals", badge: 0, emoji: <EmojiDeals /> },
+    { name: "Rent projects", href: "/projects/rent", badge: 0, emoji: <EmojiRentals /> },
+    { name: "Full Access projects", href: "/projects/full-access", badge: 0, emoji: <EmojiMarketplace /> },
+    { name: "My project access", href: "/opportunities/access", badge: 0, emoji: <EmojiRentals /> },
     { name: "Orders", href: "/orders", badge: 0, emoji: <EmojiOrders /> },
     { name: "Wallet", href: "/wallet", badge: 0, emoji: <EmojiWallet /> },
     {
@@ -181,7 +182,7 @@ export default function Sidebar() {
       badge: 0,
       emoji: <EmojiAffiliate />,
     },
-    { name: "Rentals", href: "/rentals", badge: 0, emoji: <EmojiRentals /> },
+    { name: "Past rentals", href: "/rentals", badge: 0, emoji: <EmojiRentals /> },
     {
       name: "Notifications",
       href: "/notifications",

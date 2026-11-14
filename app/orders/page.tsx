@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
+import { formatOrderPrice, getOrderPrice } from "@/lib/orderPrice";
+import { orderPaymentState } from "@/lib/orderPaymentState";
 import { useToast } from "@/hooks/useToast";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
@@ -48,13 +50,11 @@ const PAYMENT_BADGE: Record<string, { label: string; cls: string }> = {
     label: "Pay Pending",
     cls: "border-amber-500/30 bg-amber-500/15 text-amber-300",
   },
+  refunded: {
+    label: "Refunded",
+    cls: "border-slate-500/30 bg-slate-500/15 text-slate-300",
+  },
 };
-
-function getPaymentStatus(o: any): "paid" | "unpaid" | "pending" {
-  if (o.payment?.verifiedAt) return "paid";
-  if (o.status === "pending" || o.status === "cancelled") return "unpaid";
-  return "pending";
-}
 
 /* ───────────────────────── COMPONENT ───────────────────────── */
 export default function OrdersPage() {
@@ -177,7 +177,7 @@ export default function OrdersPage() {
 
   /* ── Primary CTA per order ── */
   const getPrimaryCTA = (o: any) => {
-    if (o.status === "pending" || o.status === "cancelled") {
+    if (orderPaymentState(o) === "unpaid") {
       return {
         label:
           o.status === "cancelled" ? "Retry Payment" : copy.completePaymentText,
@@ -222,7 +222,7 @@ export default function OrdersPage() {
             </p>
           </div>
           <Link
-            href="/explore-services"
+            href="/projects/full-access"
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-slate-200 hover:bg-white/10 transition-all"
           >
             Browse Marketplace
@@ -264,7 +264,7 @@ export default function OrdersPage() {
           title="Your control center is empty"
           description="Explore our marketplace to find professional services for your needs, or apply to work and start earning."
           ctaText="Browse Marketplace"
-          ctaHref="/explore-services"
+          ctaHref="/projects/full-access"
           secondaryCtaText="Apply to Work"
           secondaryCtaHref="/apply-to-work"
         />
@@ -322,7 +322,7 @@ export default function OrdersPage() {
           {/* ── ORDER ROWS ── */}
           <div className="space-y-3">
             {filtered.map((o) => {
-              const payStatus = getPaymentStatus(o);
+              const payStatus = orderPaymentState(o);
               const payBadge = PAYMENT_BADGE[payStatus];
               const stripe = STATUS_STRIPE[o.status] || "bg-slate-600";
               const cta = getPrimaryCTA(o);
@@ -366,7 +366,7 @@ export default function OrdersPage() {
                             {new Date(o.createdAt).toLocaleDateString()}
                           </span>
                           <span className="text-sm font-semibold text-emerald-400">
-                            ${o.serviceId?.price ?? "—"}
+                            {formatOrderPrice(getOrderPrice(o))}
                           </span>
                         </div>
                       </div>

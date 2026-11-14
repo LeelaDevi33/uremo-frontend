@@ -45,6 +45,7 @@ export default function ProjectDetailPage() {
   const projectId = params?.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
+  const [acquired, setAcquired] = useState<{ title: string; description: string; handoff: string; accessType: "rent" | "buy"; endsAt: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completionNotes, setCompletionNotes] = useState("");
@@ -66,9 +67,13 @@ export default function ProjectDetailPage() {
   const [rlhfTotal, setRlhfTotal] = useState(0);
 
   useEffect(() => {
+    let current = true;
     const loadProject = async () => {
       if (!projectId) return;
       setLoading(true);
+      setAcquired(null);
+      setProject(null);
+      setError(null);
       try {
         const res = await apiRequest(
           `/api/workspace/project/${projectId}`,
@@ -76,6 +81,8 @@ export default function ProjectDetailPage() {
           null,
           true,
         );
+        if (!current) return;
+        if (res.acquiredProject) { setAcquired(res.acquiredProject); return; }
         setProject(res.project);
 
         // PATCH_95: If RLHF project, load tasks
@@ -87,6 +94,7 @@ export default function ProjectDetailPage() {
               null,
               true,
             );
+            if (!current) return;
             setRlhfDataset(rlhfRes.dataset);
             setRlhfTasks(rlhfRes.tasks || []);
             setRlhfSubmitted(rlhfRes.submissionCount || 0);
@@ -107,18 +115,41 @@ export default function ProjectDetailPage() {
             null,
             true,
           );
-          if (proofRes.proof) {
+          if (current && proofRes.proof) {
             setProof(proofRes.proof);
           }
         }
       } catch (e: any) {
-        setError(e?.message || "Failed to load project");
+        if (current) setError(e?.message || "Failed to load project");
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
     loadProject();
+    return () => { current = false; };
   }, [projectId]);
+
+  useEffect(() => {
+    if (acquired?.accessType !== "rent") return;
+    const expiry = Date.parse(acquired.endsAt || "");
+    let timer: number;
+    function checkExpiry() {
+      window.clearTimeout(timer);
+      const remaining = expiry - Date.now();
+      if (!Number.isFinite(remaining) || remaining <= 0) {
+        setAcquired(null);
+        setError("This project's rental term has ended.");
+        return;
+      }
+      timer = window.setTimeout(checkExpiry, Math.min(remaining, 2_147_483_647));
+    }
+    checkExpiry();
+    window.addEventListener("focus", checkExpiry);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", checkExpiry);
+    };
+  }, [acquired]);
 
   const startProject = async () => {
     try {
@@ -262,6 +293,14 @@ export default function ProjectDetailPage() {
     );
   }
 
+  if (!error && acquired) return <main className="u-container max-w-3xl space-y-5">
+    <Link href="/workspace/projects" className="text-cyan-300 underline">My projects</Link>
+    <p className="text-sm text-cyan-300">{acquired.accessType === "buy" ? "Exclusive full access" : "Rented project"}{acquired.endsAt ? " · Expires " + new Date(acquired.endsAt).toLocaleString() : ""}</p>
+    <h1 className="text-3xl font-semibold">{acquired.title}</h1>
+    {acquired.description && <p className="whitespace-pre-wrap break-words">{acquired.description}</p>}
+    <section className="card space-y-2"><h2 className="font-semibold">Project handoff</h2><p className="whitespace-pre-wrap break-words">{acquired.handoff}</p></section>
+    <Link href="/opportunities/access" className="underline">View access history</Link>
+  </main>;
   if (error || !project) {
     return (
       <div className="u-container max-w-3xl">

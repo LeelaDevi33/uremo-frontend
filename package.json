@@ -8,13 +8,15 @@
     "build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-win.ps1",
     "build:win:swc-off": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-win.ps1 -DisableSwc",
     "start": "next start",
+    "test": "tsc -p tests/tsconfig.json && node --test \".test-build/tests/*.test.js\"",
     "lint": "eslint"
   },
   "dependencies": {
     "framer-motion": "^12.25.0",
-    "next": "16.1.1",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "next": "16.4.6",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "sanitize-html": "2.18.2",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
@@ -22,9 +24,15 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "2.16.2",
     "eslint": "^9",
-    "eslint-config-next": "16.1.1",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.8"
+    }
   }
 }

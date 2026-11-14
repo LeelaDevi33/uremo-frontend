@@ -30,6 +30,7 @@ import {
 export default function Navbar() {
   const { ready, user, isAuthenticated, logout } = useAuth();
   const pathname = usePathname();
+  const isRoleBoard = pathname === "/" || pathname === "/open-roles";
   const [logoFailed, setLogoFailed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { data: settings } = useSiteSettings();
@@ -61,20 +62,22 @@ export default function Navbar() {
   // PATCH_102: Enterprise user navigation — Marketplace, Work, Wallet, Orders, Account
   const userLinks = [
     {
-      href: "/explore-services",
-      label: "Marketplace",
+      href: "/open-roles",
+      label: "Open roles",
       emoji: <EmojiMarketplace />,
     },
+    { href: "/projects/rent", label: "Rent projects", emoji: <EmojiServices /> },
+    { href: "/projects/full-access", label: "Full Access", emoji: <EmojiServices /> },
     { href: "/workspace", label: "Work", emoji: <EmojiWork /> },
     { href: "/wallet", label: "Wallet", emoji: <EmojiWallet /> },
-    { href: "/orders", label: "Orders", emoji: <EmojiOrders /> },
     { href: "/profile", label: "Account", emoji: <EmojiAccount /> },
   ];
 
   // PATCH_102: Simplified admin links for mobile drawer (full nav is in CommandRail)
   const adminLinks = [
     { href: "/admin", label: "Dashboard", emoji: <EmojiDashboard /> },
-    { href: "/admin/services", label: "Services", emoji: <EmojiServices /> },
+    { href: "/admin/work-positions", label: "Manage roles", emoji: <EmojiWorkforce /> },
+    { href: "/admin/opportunities", label: "Project offers", emoji: <EmojiServices /> },
     { href: "/admin/orders", label: "Orders", emoji: <EmojiOrders /> },
     {
       href: "/admin/workspace/master",
@@ -98,7 +101,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="fixed top-0 inset-x-0 z-[9999] pointer-events-auto h-14 border-b border-white/10 bg-slate-900/95 backdrop-blur-xl">
+      <nav aria-label="Site navigation" className={`fixed top-0 inset-x-0 z-[9999] pointer-events-auto h-14 border-b border-white/10 ${isRoleBoard ? "bg-[#182c24]" : "bg-slate-900/95 backdrop-blur-xl"}`}>
         <div className="h-14 px-4 lg:px-6 flex items-center max-w-7xl mx-auto">
           <div className="flex items-center w-full">
             {/* Left section - Hamburger on mobile */}
@@ -109,6 +112,8 @@ export default function Navbar() {
                   onClick={() => setMobileMenuOpen(true)}
                   className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all"
                   aria-label="Open menu"
+                  aria-controls="mobile-menu"
+                  aria-expanded={mobileMenuOpen}
                 >
                   <svg
                     className="w-5 h-5"
@@ -132,7 +137,9 @@ export default function Navbar() {
                 className="inline-flex items-center gap-2 min-w-0"
                 aria-label="UREMO Home"
               >
-                {!logoFailed ? (
+                {isRoleBoard ? (
+                  <span className="text-xl font-bold tracking-tight text-white">{site.brandName || "UREMO"}</span>
+                ) : !logoFailed ? (
                   <>
                     <Image
                       src="/brand/logo-mark.png"
@@ -170,7 +177,7 @@ export default function Navbar() {
                     key={link.href}
                     href={link.href}
                     className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
-                      pathname === link.href
+                      pathname === link.href || (isRoleBoard && link.href === "/open-roles")
                         ? "bg-white/10 text-white"
                         : "text-slate-300 hover:text-white hover:bg-white/5"
                     }`}
@@ -183,7 +190,7 @@ export default function Navbar() {
 
             {/* Right section */}
             <div className="ml-auto flex gap-2 md:gap-3 items-center">
-              {!isAuthenticated && pathname === "/" && (
+              {!isAuthenticated && isRoleBoard && (
                 <>
                   <Link
                     href="/blogs"
@@ -191,19 +198,12 @@ export default function Navbar() {
                   >
                     Blogs
                   </Link>
-                  <Link href="/signup" className="btn-primary">
-                    {nav.guestPrimaryCtaText}
-                  </Link>
-                  <Link
-                    href="/explore-services"
-                    className="btn-secondary hidden sm:inline-flex"
-                  >
-                    {nav.guestSecondaryCtaText}
-                  </Link>
+                  <Link href="/login" className="rounded-lg px-2 py-2 text-sm font-medium text-slate-100 hover:underline">{nav.guestLoginText}</Link>
+                  <Link href="/signup" className="rounded-lg bg-[#d7eac7] px-3 py-2 text-sm font-semibold text-[#182c24] hover:bg-white">{nav.guestSignupText}</Link>
                 </>
               )}
 
-              {!isAuthenticated && pathname !== "/" && (
+              {!isAuthenticated && !isRoleBoard && (
                 <div className="flex items-center gap-3 text-sm text-slate-300">
                   <Link
                     href="/blogs"
@@ -277,6 +277,9 @@ export default function Navbar() {
 
           {/* Drawer */}
           <div
+            id="mobile-menu"
+            inert={!mobileMenuOpen}
+            aria-hidden={!mobileMenuOpen}
             className={`fixed inset-y-0 left-0 z-[10001] w-80 max-w-[85vw] bg-slate-900 border-r border-white/10 shadow-2xl transform transition-transform duration-300 lg:hidden ${
               mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
             }`}

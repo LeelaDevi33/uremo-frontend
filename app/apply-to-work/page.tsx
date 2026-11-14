@@ -6,8 +6,12 @@
  * Modern, clean, conversion-focused design
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { apiRequest } from "@/lib/api";
+import { linkedApplicationPosition } from "@/lib/applicationLink";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import {
   DEFAULT_PUBLIC_SITE_SETTINGS,
@@ -87,6 +91,7 @@ interface Application {
   _id: string;
   status: "pending" | "approved" | "rejected";
   positionTitle?: string;
+  position?: string | { _id: string } | null;
   category?: string;
   createdAt?: string;
 }
@@ -98,57 +103,53 @@ type WorkPosition = {
   description?: string;
   requirements?: string;
   active?: boolean;
-  screeningRequired?: boolean;
+  serviceId?: string | { _id: string } | null;
+  hasScreening?: boolean;
 };
 
 export default function ApplyToWorkPage() {
+  return <Suspense fallback={<p className="p-6">Loading positions…</p>}><ApplicationEntry /></Suspense>;
+}
+
+function ApplicationEntry() {
+  const query = useSearchParams().toString();
+  const { token, ready } = useAuth();
+  if (!ready) return <p className="p-6" role="status">Checking your session…</p>;
+  if (!token) {
+    const next = "/apply-to-work" + (query ? "?" + query : "");
+    return <div className="u-container max-w-xl py-12"><h1 className="text-3xl font-semibold">Free role applications</h1>
+      <p className="my-4 text-slate-300">Sign in to apply for a specialization or review your application.</p>
+      <div className="flex flex-wrap gap-3"><Link className="btn-primary" href={"/login?next=" + encodeURIComponent(next)}>Sign in</Link><Link className="btn-secondary" href="/open-roles">Browse open roles</Link></div>
+    </div>;
+  }
+  return <ApplicationForm key={query + token} query={query} />;
+}
+
+function ApplicationForm({ query }: { query: string }) {
+  const params = useMemo(() => new URLSearchParams(query), [query]);
   const { toast } = useToast();
   const { data: settings } = useSiteSettings();
 
   const ui =
     settings?.applyWork?.ui || DEFAULT_PUBLIC_SITE_SETTINGS.applyWork.ui;
 
-  const [requestedPositionId, setRequestedPositionId] = useState<string>("");
-
   const [positions, setPositions] = useState<WorkPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);
+  const [positionsFailed, setPositionsFailed] = useState(false);
   const [positionId, setPositionId] = useState<string>("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState(params.get("category")?.trim() || "all");
+  const linkedPosition = linkedApplicationPosition(positions, params);
 
   const [showForm, setShowForm] = useState(false);
 
   const [message, setMessage] = useState("");
+  const [resumeUrl, setResumeUrl] = useState("");
+  const [resumeMode, setResumeMode] = useState<"file" | "link">("file");
   const [resume, setResume] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [existing, setExisting] = useState<Application | null>(null);
   const [checking, setChecking] = useState(true);
-
-  // PATCH_47: Service context when coming from a service page
-  const [serviceId, setServiceId] = useState<string>("");
-  const [serviceTitle, setServiceTitle] = useState<string>("");
-  const [fromService, setFromService] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      setRequestedPositionId(params.get("positionId") || "");
-
-      const requestedCategory = String(params.get("category") || "").trim();
-      if (requestedCategory) {
-        setCategoryFilter(requestedCategory);
-      }
-
-      // PATCH_47: Capture service context
-      const svcId = params.get("serviceId") || "";
-      const svcTitle = params.get("serviceTitle") || "";
-      setServiceId(svcId);
-      setServiceTitle(svcTitle);
-      setFromService(!!svcId);
-    } catch {
-      setRequestedPositionId("");
-    }
-  }, []);
+  const [statusUnavailable, setStatusUnavailable] = useState(false);
 
   const applyFaq =
     settings?.applyWork?.faq && settings.applyWork.faq.length
@@ -173,22 +174,27 @@ export default function ApplyToWorkPage() {
   }, [positions]);
 
   const filteredPositions = useMemo(() => {
+    if (linkedPosition !== undefined) return linkedPosition ? [linkedPosition] : [];
     return positions.filter((p) => {
       if (categoryFilter === "all") return true;
       return String(p.category || "") === categoryFilter;
     });
-  }, [positions, categoryFilter]);
+  }, [positions, categoryFilter, linkedPosition]);
 
   const hasPositions = positions.length > 0;
 
   const checkExisting = async () => {
+    setChecking(true);
+    setStatusUnavailable(false);
     try {
-      const app = await apiRequest("/api/apply-work/me", "GET", null, true);
-      if (app) {
-        setExisting(app);
-      }
-    } catch (err) {
-      // No existing application
+      const requested = params.get("positionId") || params.get("jobId");
+      const path = requested && /^[a-f0-9]{24}$/i.test(requested)
+        ? "/api/apply-work/me?positionId=" + encodeURIComponent(requested)
+        : "/api/apply-work/me";
+      const app = await apiRequest<Application | null>(path, "GET", null, true);
+      setExisting(app);
+    } catch {
+      setStatusUnavailable(true);
     } finally {
       setChecking(false);
     }
@@ -196,6 +202,7 @@ export default function ApplyToWorkPage() {
 
   const loadPositions = async () => {
     setPositionsLoading(true);
+    setPositionsFailed(false);
     try {
       const data = await apiRequest<WorkPosition[]>(
         "/api/work-positions",
@@ -213,42 +220,41 @@ export default function ApplyToWorkPage() {
         setCategoryFilter("all");
       }
 
-      const preferredId = requestedPositionId.trim();
-      if (preferredId && activeOnly.some((p) => p._id === preferredId)) {
-        setPositionId(preferredId);
-      }
     } catch {
       setPositions([]);
+      setPositionsFailed(true);
     } finally {
       setPositionsLoading(false);
     }
   };
 
-  useEffect(() => {
-    const preferredId = requestedPositionId.trim();
-    if (!preferredId) return;
-    if (positions.some((p) => p._id === preferredId)) {
-      setPositionId(preferredId);
-    }
-  }, [requestedPositionId, positions]);
+  const selectedPosition = linkedPosition === undefined ? positionsById.get(positionId) : linkedPosition;
 
   const submit = async () => {
-    const selected = positionId ? positionsById.get(positionId) : null;
-
-    if (!selected) {
+    if (!selectedPosition) {
       toast(ui.selectPositionRequiredText, "error");
       return;
     }
 
-    if (!resume) {
+    if (resumeMode === "file" && !resume) {
       toast(ui.resumeRequiredText, "error");
       return;
     }
 
     const formData = new FormData();
-    if (selected?._id) formData.append("positionId", selected._id);
+    formData.append("positionId", selectedPosition._id);
     formData.append("message", message);
-    formData.append("resume", resume);
+    if (resumeMode === "link") {
+      let url: URL;
+      try { url = new URL(resumeUrl.trim()); }
+      catch { toast("Enter a full HTTPS resume link.", "error"); return; }
+      if (url.protocol !== "https:" || url.username || url.password) {
+        toast("Use an HTTPS resume link without embedded credentials.", "error"); return;
+      }
+      formData.append("resumeUrl", url.href);
+    } else if (resume) {
+      formData.append("resume", resume);
+    }
 
     try {
       setLoading(true);
@@ -272,8 +278,46 @@ export default function ApplyToWorkPage() {
   if (checking) {
     return <div className="p-6">{ui.loadingPositionsText}</div>;
   }
+  if (statusUnavailable) {
+    return <div className="u-container max-w-2xl py-12" role="alert">
+      <h1 className="text-2xl font-bold">We couldn’t check your application</h1>
+      <p className="my-4">Try again to see whether you have already applied for this role.</p>
+      <button type="button" className="btn-primary" onClick={checkExisting}>Try again</button>
+    </div>;
+  }
+
+  if (linkedPosition !== undefined && positionsLoading) {
+    return <p className="p-6">{ui.loadingPositionsText}</p>;
+  }
+
+  if (linkedPosition === null) {
+    return (
+      <div className="u-container max-w-2xl py-12">
+        <h1 className="text-2xl font-bold">{positionsFailed ? "Could not load the linked position" : "Linked position unavailable"}</h1>
+        <p className="mt-3 text-slate-300">
+          {positionsFailed ? "Try loading the positions again." : "This link could not be matched to an open specialization."}
+        </p>
+        <div className="mt-6 flex gap-4">
+          {positionsFailed && <button className="btn-primary" onClick={loadPositions}>Try again</button>}
+          <Link className="btn-secondary" href="/open-roles">Browse open roles</Link>
+        </div>
+      </div>
+    );
+  }
 
   if (existing) {
+    const existingPositionId = typeof existing.position === "string" ? existing.position : existing.position?._id;
+    if (linkedPosition && existingPositionId !== linkedPosition._id) {
+      return (
+        <div className="u-container max-w-2xl py-12">
+          <h1 className="text-2xl font-bold">You already have an application</h1>
+          <p className="mt-3 text-slate-300">
+            You opened the position for {linkedPosition.title}. View your existing application to check its position and status.
+          </p>
+          <Link className="btn-secondary mt-6 inline-block" href="/apply-to-work">View my application</Link>
+        </div>
+      );
+    }
     const statusColor = {
       pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
       approved: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -373,13 +417,10 @@ export default function ApplyToWorkPage() {
     );
   }
 
-  // PATCH_56: Selected position for right panel
-  const selectedPosition = positionId ? positionsById.get(positionId) : null;
-
   return (
     <div className="min-h-screen">
       {/* Hero Header */}
-      <div className="relative overflow-hidden border-b border-white/5">
+      {!linkedPosition && <div className="relative overflow-hidden border-b border-white/5">
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500/10 blur-[120px] rounded-full" />
 
@@ -402,7 +443,7 @@ export default function ApplyToWorkPage() {
             </div>
 
             {/* Category Filter */}
-            {categories.length > 1 && (
+            {!linkedPosition && categories.length > 1 && (
               <div className="flex items-center gap-2">
                 <FilterIcon className="w-4 h-4 text-slate-500" />
                 <select
@@ -420,34 +461,16 @@ export default function ApplyToWorkPage() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
-      {/* PATCH_47: Service context banner */}
-      {fromService && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-          <div className="rounded-xl border border-blue-500/20 bg-gradient-to-r from-blue-500/10 to-transparent p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">💼</span>
-              <div>
-                <p className="font-medium text-blue-300">
-                  Applying from Service
-                </p>
-                {serviceTitle && (
-                  <p className="text-sm text-slate-400">
-                    You're applying to work on:{" "}
-                    <span className="text-white font-medium">
-                      {serviceTitle}
-                    </span>
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+      {linkedPosition && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <Link className="text-emerald-400 hover:underline" href={"/open-roles?role=" + encodeURIComponent(linkedPosition._id)}>← Back to role details</Link>
         </div>
       )}
 
       {/* Main Content - Two Column Layout */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`${linkedPosition ? "max-w-3xl" : "max-w-7xl"} mx-auto px-4 sm:px-6 lg:px-8 py-8`}>
         {positionsLoading ? (
           /* Skeleton Loading State */
           <div className="grid lg:grid-cols-5 gap-6">
@@ -481,17 +504,16 @@ export default function ApplyToWorkPage() {
               {ui.noPositionsFoundText}
             </p>
             <a
-              href="/explore-services"
+              href="/open-roles"
               className="inline-block mt-6 text-emerald-400 hover:text-emerald-300 font-medium transition"
             >
-              Browse Services Instead →
+              Browse open roles →
             </a>
           </div>
         ) : (
           /* Two Column Layout */
-          <div className="grid lg:grid-cols-5 gap-6">
-            {/* Left Column - Position List */}
-            <div className="lg:col-span-2 space-y-3">
+          <div className={linkedPosition ? "" : "grid lg:grid-cols-5 gap-6"}>
+            {!linkedPosition && <div className="lg:col-span-2 space-y-3">
               <p className="text-sm text-slate-500 mb-2 px-1">
                 {filteredPositions.length} position
                 {filteredPositions.length !== 1 ? "s" : ""} available
@@ -503,7 +525,7 @@ export default function ApplyToWorkPage() {
                 </div>
               ) : (
                 filteredPositions.map((p) => {
-                  const isSelected = positionId === p._id;
+                  const isSelected = selectedPosition?._id === p._id;
                   return (
                     <button
                       key={p._id}
@@ -524,7 +546,7 @@ export default function ApplyToWorkPage() {
                             <p className="font-semibold text-white truncate">
                               {p.title}
                             </p>
-                            {p.screeningRequired && (
+                            {p.hasScreening && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
                                 Screening Required
                               </span>
@@ -567,7 +589,7 @@ export default function ApplyToWorkPage() {
                   );
                 })
               )}
-            </div>
+            </div>}
 
             {/* Right Column - Position Details & Application Form */}
             <div className="lg:col-span-3">
@@ -593,18 +615,17 @@ export default function ApplyToWorkPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          {selectedPosition.screeningRequired && (
+                          {selectedPosition.hasScreening && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-orange-500/20 text-orange-400 border border-orange-500/30">
                               Screening Required
                             </span>
                           )}
                           <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            Open Position
+                            Free role application
                           </span>
                         </div>
-                        <h2 className="text-2xl font-bold text-white">
-                          {selectedPosition.title}
-                        </h2>
+                        {linkedPosition ? <h1 className="text-2xl font-bold text-white">{selectedPosition.title}</h1> :
+                          <h2 className="text-2xl font-bold text-white">{selectedPosition.title}</h2>}
                         <p className="text-slate-400 mt-1">
                           {selectedPosition.category}
                         </p>
@@ -651,7 +672,7 @@ export default function ApplyToWorkPage() {
                     )}
 
                     {/* Application Form */}
-                    {!showForm ? (
+                    {!showForm && !linkedPosition ? (
                       <button
                         type="button"
                         onClick={() => setShowForm(true)}
@@ -660,17 +681,18 @@ export default function ApplyToWorkPage() {
                         Apply for this Position
                       </button>
                     ) : (
-                      <div className="space-y-4 pt-4 border-t border-white/10">
+                      <form className="space-y-4 pt-4 border-t border-white/10" onSubmit={event => { event.preventDefault(); if (!loading) void submit(); }}>
                         <h3 className="text-lg font-semibold text-white">
                           Submit Your Application
                         </h3>
 
                         {/* Message */}
                         <div>
-                          <label className="text-sm text-slate-400 block mb-2">
+                          <label htmlFor="role-application-message" className="text-sm text-slate-400 block mb-2">
                             {ui.messageLabel}
                           </label>
                           <textarea
+                            id="role-application-message"
                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50 transition resize-none"
                             rows={4}
                             placeholder={ui.messagePlaceholder}
@@ -681,50 +703,40 @@ export default function ApplyToWorkPage() {
 
                         {/* Resume Upload */}
                         <div>
-                          <label className="text-sm text-slate-400 block mb-2">
+                          <span id="role-resume-method" className="text-sm text-slate-400 block mb-2">
                             {ui.resumeLabel}
-                          </label>
-                          <div
-                            className="rounded-xl border-2 border-dashed border-white/20 bg-white/5 p-6 text-center hover:border-emerald-500/50 transition cursor-pointer"
-                            onClick={() =>
-                              document.getElementById("resume-upload")?.click()
-                            }
-                          >
-                            <input
-                              id="resume-upload"
-                              type="file"
-                              accept=".pdf,.doc,.docx"
-                              onChange={(e) =>
-                                setResume(e.target.files?.[0] || null)
-                              }
-                              className="hidden"
-                            />
-                            {resume ? (
-                              <div className="flex items-center justify-center gap-2 text-emerald-400">
-                                <CheckCircleIcon className="w-5 h-5" />
-                                <span className="font-medium">
-                                  {resume.name}
-                                </span>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="w-12 h-12 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center mx-auto mb-3">
-                                  <ClipboardIcon className="w-6 h-6 text-slate-400" />
-                                </div>
-                                <p className="text-slate-300 font-medium">
-                                  Click to upload resume
-                                </p>
-                                <p className="text-xs text-slate-500 mt-1">
-                                  {ui.resumeHelperText}
-                                </p>
-                              </>
-                            )}
+                          </span>
+                          <div role="group" aria-labelledby="role-resume-method" className="mb-3 flex gap-3">
+                            <button type="button" aria-pressed={resumeMode === "file"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("file")}>Upload a file</button>
+                            <button type="button" aria-pressed={resumeMode === "link"} className="rounded border px-3 py-1.5 aria-pressed:border-blue-400" onClick={() => setResumeMode("link")}>Use a resume link</button>
                           </div>
+                          {resumeMode === "link" ? <label className="block text-sm">Resume link (HTTPS)
+                            <input type="url" className="mt-2 w-full rounded-lg border border-white/20 bg-slate-900 p-3" value={resumeUrl} onChange={e => setResumeUrl(e.target.value)} />
+                          </label> : (
+                            <label className="block rounded-xl border border-dashed border-white/25 bg-white/5 p-4 text-sm">
+                              Resume file (PDF, JPG, PNG or WebP, up to 10 MB)
+                              <input
+                                type="file"
+                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                className="mt-3 block w-full text-slate-300"
+                                onChange={event => {
+                                  const file = event.currentTarget.files?.[0] ?? null;
+                                  if (file && file.size > 10 * 1024 * 1024) {
+                                    event.currentTarget.value = "";
+                                    setResume(null);
+                                    toast("Choose a file of 10 MB or less.", "error");
+                                  } else {
+                                    setResume(file);
+                                  }
+                                }}
+                              />
+                            </label>
+                          )}
                         </div>
 
                         {/* Submit Button */}
                         <button
-                          onClick={submit}
+                          type="submit"
                           disabled={loading}
                           className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold hover:from-emerald-400 hover:to-teal-400 transition-all duration-200 shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -755,7 +767,7 @@ export default function ApplyToWorkPage() {
                             ui.submitText
                           )}
                         </button>
-                      </div>
+                      </form>
                     )}
                   </div>
                 </div>

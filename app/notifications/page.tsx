@@ -126,7 +126,7 @@ export default function NotificationsPage() {
         order: `/orders/${notification.resourceId}`,
         ticket: `/support/tickets/${notification.resourceId}`,
         rental: `/rentals`,
-        withdrawal: `/affiliate/withdrawals`,
+        withdrawal: `/finance/withdrawals`,
       };
       const route = routes[notification.resourceType];
       if (route) router.push(route);
@@ -187,7 +187,7 @@ export default function NotificationsPage() {
             title="No notifications yet"
             description="When you receive orders, wallet updates, or important alerts, they'll appear here. Start using UREMO to get your first notification!"
             ctaText="Explore Services"
-            ctaHref="/explore-services"
+            ctaHref="/open-roles"
             secondaryCtaText="Go to Dashboard"
             secondaryCtaHref="/dashboard"
           />

@@ -105,27 +105,6 @@ export default function MyRentalsPage() {
     }
   };
 
-  const renewRental = async (rentalId: string) => {
-    try {
-      const res = await apiRequest(
-        `/api/rentals/${rentalId}/renew`,
-        "POST",
-        null,
-        true,
-      );
-      const orderId = res?.order?._id || res?.orderId;
-      if (orderId) {
-        toast("Renewal order created. Redirecting to payment...", "success");
-        window.location.href = `/payment/${orderId}`;
-      } else {
-        toast("Rental renewed", "success");
-        loadRentals();
-      }
-    } catch (err: any) {
-      toast(err?.message || "Failed to renew rental", "error");
-    }
-  };
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString("en-US", {
@@ -172,19 +151,19 @@ export default function MyRentalsPage() {
       <PageHeader
         title="My Rentals"
         emoji={<EmojiRentals />}
-        description="Manage your active subscriptions and rental services"
-        actionLabel="Find Work & Services"
-        actionHref="/explore-services"
+        description="View your earlier service rentals and their access periods."
+        actionLabel="Rent projects"
+        actionHref="/projects/rent"
       />
 
       {rentals.length === 0 ? (
         <div className="card">
           <EmptyState
             icon="Rent"
-            title="No active rentals"
-            description="Rent premium services on a subscription basis for ongoing access."
-            ctaText="Find Work & Services"
-            ctaHref="/explore-services"
+            title="No past service rentals"
+            description="Any earlier service rentals associated with your account appear here."
+            ctaText="Rent projects"
+            ctaHref="/projects/rent"
           />
         </div>
       ) : (
@@ -278,12 +257,6 @@ export default function MyRentalsPage() {
                         displayStatus === "expiring_soon") && (
                         <>
                           <button
-                            onClick={() => renewRental(rental._id)}
-                            className="text-xs px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition"
-                          >
-                            Renew
-                          </button>
-                          <button
                             onClick={() => cancelRental(rental._id)}
                             className="text-xs px-3 py-1.5 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition"
                           >
@@ -299,14 +272,7 @@ export default function MyRentalsPage() {
                           Complete Payment
                         </Link>
                       )}
-                      {displayStatus === "expired" && (
-                        <button
-                          onClick={() => renewRental(rental._id)}
-                          className="text-xs px-3 py-1.5 bg-emerald-500/20 text-emerald-300 rounded-lg hover:bg-emerald-500/30 transition"
-                        >
-                          Renew Subscription
-                        </button>
-                      )}
+
                     </div>
                   </div>
                 </div>

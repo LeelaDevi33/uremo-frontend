@@ -1,663 +1,170 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { apiRequest } from "@/lib/api";
-import { useToast } from "@/hooks/useToast";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ApiError, apiRequest } from "@/lib/api";
+import { projectCategories } from "../opportunities/editor";
+import { briefFields, briefPayload, experienceLabels, roleReviewNotes, workModeLabels, type RoleBrief } from "./roleBrief";
 
-type WorkPosition = {
-  _id: string;
-  title: string;
-  category: string;
-  description?: string;
-  requirements?: string;
-  active?: boolean;
-  sortOrder?: number;
-  createdAt?: string;
-  updatedAt?: string;
-  hasScreening?: boolean;
-  screeningId?: { _id: string; title: string; screeningType?: string };
-  screeningIds?: Array<{
-    _id: string;
-    title: string;
-    screeningType?: string;
-    passThreshold?: number;
-  }>;
+type Role = RoleBrief & {
+  _id: string; title: string; category: string;
+  adminNotes?: string; active?: boolean; isSpecialization?: boolean; sortOrder?: number; revision?: string; updatedAt?: string;
+  hasScreening?: boolean; screeningId?: unknown; screeningIds?: unknown[]; trainingMaterials?: unknown[];
 };
-
-type Draft = {
-  _id?: string;
-  title: string;
-  category: string;
-  description: string;
-  requirements: string;
-  active: boolean;
-  sortOrder: number;
-};
-
-const emptyDraft = (): Draft => ({
-  title: "",
-  category: "",
-  description: "",
-  requirements: "",
-  active: true,
-  sortOrder: 0,
-});
+function fields(role?: Role) {
+  return { title: role?.title ?? "", category: role?.category ?? "", ...briefFields(role),
+    adminNotes: role?.adminNotes ?? "", active: role?.active !== false,
+    sortOrder: String(role?.sortOrder ?? 0) };
+}
+const endpoint = "/api/admin/work-positions";
+const input = "u-input mt-1 block w-full";
+const panel = "rounded-xl border border-slate-700/70 bg-[#101824] p-4 sm:p-6";
+function message(error: unknown) { return error instanceof Error ? error.message : "The request failed."; }
 
 export default function AdminWorkPositionsPage() {
-  const { toast } = useToast();
-
-  const [positions, setPositions] = useState<WorkPosition[]>([]);
+  const [rows, setRows] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>(emptyDraft());
-
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<
-    "all" | "active" | "inactive"
-  >("all");
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiRequest<WorkPosition[]>(
-        "/api/admin/work-positions",
-        "GET",
-        null,
-        true,
-      );
-      setPositions(Array.isArray(data) ? data : []);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load positions");
-      setPositions([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [active, setActive] = useState("all");
+  const [reviewOnly, setReviewOnly] = useState(false);
+  const [editor, setEditor] = useState<{ role?: Role; draft: ReturnType<typeof fields> } | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
+  const [revision, setRevision] = useState(0);
+  const initialLink = useRef(true);
+  const reload = () => { setLoading(true); setRevision(v => v + 1); };
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of positions) {
-      const c = String(p?.category || "").trim();
-      if (c) set.add(c);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [positions]);
-
-  const visiblePositions = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return positions
-      .filter((p) => {
-        if (statusFilter === "active" && p.active === false) return false;
-        if (statusFilter === "inactive" && p.active !== false) return false;
-        if (categoryFilter !== "all") {
-          if (String(p.category || "") !== categoryFilter) return false;
+    let current = true;
+    apiRequest<Role[]>(endpoint, "GET", null, true).then(roles => {
+      if (!current) return;
+      if (!Array.isArray(roles)) throw new Error("The role list could not be read.");
+      setRows(roles);
+      if (initialLink.current) {
+        initialLink.current = false;
+        const id = new URLSearchParams(window.location.search).get("edit");
+        if (id) {
+          const role = roles.find(row => row._id === id);
+          if (role) setEditor({ role, draft: fields(role) });
+          else setError("The linked job role could not be found.");
         }
-        if (!q) return true;
-
-        const hay = [p.title, p.category, p.description, p.requirements]
-          .map((v) => String(v || "").toLowerCase())
-          .join("\n");
-        return hay.includes(q);
-      })
-      .sort((a, b) => {
-        const aActive = a.active !== false;
-        const bActive = b.active !== false;
-        if (aActive !== bActive) return aActive ? -1 : 1;
-        const aSort = Number.isFinite(Number(a.sortOrder))
-          ? Number(a.sortOrder)
-          : 0;
-        const bSort = Number.isFinite(Number(b.sortOrder))
-          ? Number(b.sortOrder)
-          : 0;
-        if (aSort !== bSort) return aSort - bSort;
-        return String(a.title || "").localeCompare(String(b.title || ""));
-      });
-  }, [positions, search, categoryFilter, statusFilter]);
-
-  const openCreate = () => {
-    setDraft(emptyDraft());
-    setModalOpen(true);
-  };
-
-  const openEdit = (p: WorkPosition) => {
-    setDraft({
-      _id: p._id,
-      title: String(p.title || ""),
-      category: String(p.category || ""),
-      description: String(p.description || ""),
-      requirements: String(p.requirements || ""),
-      active: p.active !== false,
-      sortOrder: Number.isFinite(Number(p.sortOrder)) ? Number(p.sortOrder) : 0,
-    });
-    setModalOpen(true);
-  };
-
-  const save = async () => {
-    const title = draft.title.trim();
-    const category = draft.category.trim();
-    if (!title) return toast("Title is required", "error");
-    if (!category) return toast("Category is required", "error");
-
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = {
-        title,
-        category,
-        description: draft.description.trim(),
-        requirements: draft.requirements.trim(),
-        active: Boolean(draft.active),
-        sortOrder: Number(draft.sortOrder || 0),
-      };
-
-      if (draft._id) {
-        await apiRequest(
-          `/api/admin/work-positions/${draft._id}`,
-          "PUT",
-          payload,
-          true,
-        );
-        toast("Position updated", "success");
-      } else {
-        await apiRequest("/api/admin/work-positions", "POST", payload, true);
-        toast("Position created", "success");
       }
-
-      setModalOpen(false);
-      await load();
-    } catch (e: any) {
-      const msg = e?.message || "Save failed";
-      setError(msg);
-      toast(msg, "error");
-    } finally {
-      setSaving(false);
+    }).catch(cause => { if (current) setError(message(cause)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [revision]);
+  function edit(role?: Role) {
+    setEditor({ role, draft: fields(role) }); setConflict(false); setError(""); setNotice("");
+  }
+  function close() {
+    if (editor && JSON.stringify(editor.draft) !== JSON.stringify(fields(editor.role)) && !window.confirm("Discard unsaved role changes?")) return;
+    setEditor(null); setError(""); setConflict(false);
+    window.history.replaceState(null, "", "/admin/work-positions");
+  }
+  async function mutate(action: "save" | "toggle" | "delete", role?: Role) {
+    if (lock.current) return;
+    const version = role?.revision ?? role?.updatedAt;
+    if (role && !version) { setError("Reload this role to obtain its current version."); return; }
+    const draft = editor?.draft;
+    if (action === "save" && (!draft || !draft.title.trim() || !draft.category.trim() || !/^-?\d+$/.test(draft.sortOrder) || !Number.isSafeInteger(Number(draft.sortOrder)))) {
+      setError("Enter a title, category and whole-number display order."); return;
     }
-  };
-
-  const remove = async (p: WorkPosition) => {
-    const ok = window.confirm(`Delete position “${p.title}”?`);
-    if (!ok) return;
-
+    if (role && action === "delete" && !window.confirm(`Delete the unused role “${role.title}”?`)) return;
+    if (role && action === "toggle" && role.active !== false && !window.confirm(`Deactivate “${role.title}” and close it to new applications?`)) return;
+    lock.current = true; setBusy(true); setError(""); setNotice("");
     try {
-      await apiRequest(
-        `/api/admin/work-positions/${p._id}`,
-        "DELETE",
-        null,
-        true,
-      );
-      toast("Position deleted", "success");
-      await load();
-    } catch (e: any) {
-      toast(e?.message || "Delete failed", "error");
-    }
-  };
-
-  const toggleActive = async (p: WorkPosition) => {
-    const nextActive = p.active === false;
-
-    // Optimistic UI
-    setPositions((cur) =>
-      cur.map((x) => (x._id === p._id ? { ...x, active: nextActive } : x)),
-    );
-
-    try {
-      await apiRequest(
-        `/api/admin/work-positions/${p._id}`,
-        "PUT",
-        { active: nextActive },
-        true,
-      );
-      toast(
-        nextActive ? "Position activated" : "Position deactivated",
-        "success",
-      );
-    } catch (e: any) {
-      // Revert on error
-      setPositions((cur) =>
-        cur.map((x) => (x._id === p._id ? { ...x, active: p.active } : x)),
-      );
-      toast(e?.message || "Update failed", "error");
-    }
-  };
-
-  return (
-    <div className="u-container max-w-6xl space-y-6">
-      {/* PATCH_79: Job Roles Header - Clear purpose and guidance */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl">💼</span>
-            <div>
-              <h1 className="text-3xl font-bold">Job Roles</h1>
-              <p className="text-sm text-[#9CA3AF] mt-1">
-                Define WHAT type of work exists and WHO can do it.
-              </p>
-            </div>
+      const body = action === "save" && draft ? { ...draft, ...briefPayload(draft), title: draft.title.trim(), category: draft.category.trim(), sortOrder: Number(draft.sortOrder) } :
+        action === "toggle" ? { active: role?.active === false } : {};
+      await apiRequest(role ? endpoint + "/" + role._id : endpoint, action === "delete" ? "DELETE" : role ? "PUT" : "POST",
+        { ...body, ...(role && { expectedRevision: version }) }, true);
+      setNotice(action === "delete" ? "Job role deleted." : action === "toggle" ? "Role availability updated." : "Job role saved.");
+      setEditor(null); setConflict(false); window.history.replaceState(null, "", "/admin/work-positions"); reload();
+    } catch (cause) {
+      setError(message(cause));
+      if (cause instanceof ApiError && cause.status === 409) { setConflict(true); reload(); }
+    } finally { lock.current = false; setBusy(false); }
+  }
+  const categories = [...new Set(rows.map(row => row.category).filter(Boolean))].sort();
+  const suggestions = [...new Set([...projectCategories.map(([value]) => value), ...categories])].sort();
+  const notes = roleReviewNotes(rows);
+  const visible = rows.filter(row => (!reviewOnly || notes.has(row._id)) && (!category || row.category === category) &&
+    (active === "all" || (row.active !== false) === (active === "active")) &&
+    [row.title, row.category, row.description, row.requirements, row.locationEligibility, ...(row.skills ?? [])].some(value => value?.toLowerCase().includes(query.toLowerCase().trim())));
+  const draft = editor?.draft;
+  function update(key: keyof ReturnType<typeof fields>, value: string | boolean) {
+    setEditor(current => current && ({ ...current, draft: { ...current.draft, [key]: value } }));
+    setError("");
+  }
+  function save(event: FormEvent) { event.preventDefault(); void mutate("save", editor?.role); }
+  return <div className="mx-auto w-full max-w-6xl px-4 py-7 text-slate-200 sm:px-6">
+    {editor ? <button type="button" className="mb-3 text-sm text-cyan-300" disabled={busy} onClick={close}>← All specializations</button> :
+      <Link href="/admin/opportunities" className="text-sm text-cyan-300 hover:underline">Manage paid project offers</Link>}
+    <header className="my-4 flex flex-wrap justify-between gap-3"><h1 className="text-3xl font-semibold">{editor ? editor.role ? "Edit specialization" : "New specialization" : "Specializations"}</h1>
+      {!editor && <button className="btn-primary" type="button" onClick={() => edit()} disabled={busy || loading}>New specialization</button>}</header>
+    {!editor && <p className="mb-4 text-sm text-slate-300">Workers apply to a specialization here. Set its requirements, then manage the applicants, screenings and projects for that role.</p>}
+    {error && !editor && <p role="alert" className="mb-3 rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
+    {notice && <p role="status" className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3">{notice}</p>}
+    {draft && editor ? <form className={panel + " max-w-3xl"} onSubmit={save}>
+      <fieldset disabled={busy} className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2"><label>Role title<input className={input} maxLength={80} required value={draft.title} onChange={e => update("title", e.target.value)} /></label>
+        <label>Role category<input className={input} maxLength={48} required value={draft.category} list="job-role-categories" onChange={e => update("category", e.target.value)} />
+          <datalist id="job-role-categories">{suggestions.map(value => <option key={value} value={value} />)}</datalist></label></div>
+        <fieldset className="space-y-4 border-y border-white/10 py-4">
+          <legend className="px-1 font-semibold">Public role brief</legend>
+          <label className="block">Public description<textarea aria-label="Public description" className={input} rows={3} maxLength={800} value={draft.description} onChange={e => update("description", e.target.value)} /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label>Experience level<select aria-label="Experience level" className={input} value={draft.experienceLevel} onChange={e => update("experienceLevel", e.target.value)}>
+              <option value="">Unspecified</option>
+              {Object.entries(experienceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            <label>Work mode<select aria-label="Work mode" className={input} value={draft.workMode} onChange={e => update("workMode", e.target.value)}>
+              <option value="">Unspecified</option>
+              {Object.entries(workModeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            <label>Eligible locations<input className={input} maxLength={160} value={draft.locationEligibility} onChange={e => update("locationEligibility", e.target.value)} /></label>
+            <label>Time commitment<input className={input} maxLength={120} value={draft.timeCommitment} onChange={e => update("timeCommitment", e.target.value)} /></label>
           </div>
-          {/* PATCH_79: Flow guidance */}
-          <p className="text-xs text-cyan-400/70 mt-2">
-            Job Roles → Screenings → Workers. Each role defines eligibility
-            requirements.
-          </p>
-        </div>
-
-        <button type="button" onClick={openCreate} className="btn-primary">
-          + New Job Role
-        </button>
+          <label className="block">Skills<textarea aria-label="Skills" aria-describedby="role-skill-hint" className={input} rows={3} value={draft.skills} onChange={e => update("skills", e.target.value)} /></label>
+          <p id="role-skill-hint" className="text-xs text-slate-400">Enter up to 12 skills, one per line.</p>
+          <label className="block">Responsibilities<textarea aria-label="Responsibilities" aria-describedby="role-responsibility-hint" className={input} rows={3} value={draft.responsibilities} onChange={e => update("responsibilities", e.target.value)} /></label>
+          <p id="role-responsibility-hint" className="text-xs text-slate-400">Enter up to 12 responsibilities, one per line.</p>
+          <label className="block">Applicant requirements<textarea aria-label="Applicant requirements" className={input} rows={3} maxLength={1600} value={draft.requirements} onChange={e => update("requirements", e.target.value)} /></label>
+        </fieldset>
+        <label className="block">Private admin notes<textarea aria-label="Private admin notes" className={input} rows={2} maxLength={4000} value={draft.adminNotes} onChange={e => update("adminNotes", e.target.value)} /></label>
+        <label className="block max-w-xs">Display order<input className={input} type="number" step="1" required value={draft.sortOrder} onChange={e => update("sortOrder", e.target.value)} /></label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={draft.active} onChange={e => update("active", e.target.checked)} /> Accept applications for this specialization</label>
+        {error && <p role="alert" className="rounded border border-rose-800 bg-rose-950/40 p-3">{error}</p>}
+        <div className="flex flex-wrap gap-3"><button className="btn-primary" type="submit" disabled={conflict}>{busy ? "Saving…" : "Save role"}</button>
+          <button className="btn-secondary" type="button" onClick={close}>Cancel</button>
+          {editor.role && conflict && <button className="btn-secondary" type="button" disabled={loading} onClick={() => {
+            const latest = rows.find(row => row._id === editor.role?._id);
+            if (latest && window.confirm("Replace your edits with the latest saved role?")) edit(latest);
+          }}>Reload saved role</button>}</div>
+      </fieldset>
+    </form> : <>
+      <div className={panel + " mb-4 grid gap-3 sm:grid-cols-3"}>
+        <label>Search roles<input type="search" className={input} value={query} onChange={e => setQuery(e.target.value)} /></label>
+        <label>Filter by category<select className={input} value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option>{categories.map(v => <option key={v}>{v}</option>)}</select></label>
+        <label>Filter by availability<select className={input} value={active} onChange={e => setActive(e.target.value)}><option value="all">All roles</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <label className="flex items-center gap-2 sm:col-span-3"><input type="checkbox" checked={reviewOnly}
+          onChange={event => setReviewOnly(event.target.checked)} />Show open roles with review notes ({notes.size})</label>
       </div>
-
-      {/* PATCH_79: What is this page for? */}
-      <div className="p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-slate-800/50 to-cyan-500/10 border border-blue-500/20">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">ℹ️</span>
-          <div className="flex-1">
-            <h3 className="text-sm font-semibold text-white mb-1">
-              About Job Roles
-            </h3>
-            <ul className="text-sm text-slate-300 space-y-1">
-              <li>
-                • Job Roles define{" "}
-                <span className="text-cyan-400">types of work</span> available
-                on your platform
-              </li>
-              <li>
-                • Each role can have a{" "}
-                <span className="text-amber-400">screening test</span> workers
-                must pass before working
-              </li>
-              <li>
-                • Workers apply for roles → Pass screening → Get assigned
-                projects
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label className="block text-xs text-[#9CA3AF]">Search</label>
-            <input
-              className="u-input mt-2"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, category, description…"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-[#9CA3AF]">Category</label>
-            <select
-              className="u-input mt-2"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-            >
-              <option value="all">All</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-[#9CA3AF]">Status</label>
-            <select
-              className="u-input mt-2"
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as "all" | "active" | "inactive")
-              }
-            >
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="mt-3 text-xs text-[#9CA3AF]">
-          Showing {visiblePositions.length} of {positions.length}
-        </div>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-200">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-slate-400">Loading…</div>
-      ) : positions.length === 0 ? (
-        <div className="card text-center py-12">
-          <div className="mx-auto w-16 h-16 rounded-2xl border border-blue-500/20 bg-blue-500/10 flex items-center justify-center text-3xl text-blue-300 mb-4">
-            💼
-          </div>
-          <h3 className="text-lg font-semibold text-white">No Job Roles Yet</h3>
-          <p className="text-sm text-slate-400 mt-2 max-w-md mx-auto">
-            Job Roles define the types of work available on your platform.
-            Workers will apply for these roles.
-          </p>
-          {/* PATCH_79: Clear next step */}
-          <div className="mt-4 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/20 inline-block">
-            <p className="text-sm text-cyan-300">
-              👉 <span className="font-medium">Next Step:</span> Create your
-              first job role to start accepting worker applications
-            </p>
-          </div>
-          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-            <button type="button" onClick={openCreate} className="btn-primary">
-              + Create Job Role
-            </button>
-          </div>
-        </div>
-      ) : visiblePositions.length === 0 ? (
-        <div className="card">
-          <p className="text-sm text-[#9CA3AF]">
-            No positions match your filters.
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {visiblePositions.map((p) => (
-            <div key={p._id} className="card">
-              {/* PATCH_79: Job Role Header with Clear Status */}
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-white">{p.title}</p>
-                    {p.active === false ? (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-slate-500/20 text-slate-400">
-                        Inactive
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-400">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-[#9CA3AF] mt-1">
-                    Category: {p.category}
-                  </p>
-                </div>
-                <Link
-                  href={`/admin/work-positions/${p._id}`}
-                  className="btn-primary text-sm"
-                >
-                  Manage Role →
-                </Link>
-              </div>
-
-              {/* PATCH_79: Key Info Panel - What admin needs to know */}
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {/* Screening Required? */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">
-                    Screening Required?
-                  </div>
-                  {p.hasScreening ? (
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-emerald-400 text-lg">✓</span>
-                        <span className="text-sm font-medium text-emerald-400">
-                          Yes
-                        </span>
-                      </div>
-                      {p.screeningIds && p.screeningIds.length > 0 ? (
-                        <div
-                          className="text-xs text-slate-400 truncate"
-                          title={p.screeningIds.map((s) => s.title).join(", ")}
-                        >
-                          {p.screeningIds.map((s) => s.title).join(", ")}
-                        </div>
-                      ) : p.screeningId?.title ? (
-                        <div
-                          className="text-xs text-slate-400 truncate"
-                          title={p.screeningId.title}
-                        >
-                          {p.screeningId.title}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-amber-400 text-lg">⚠️</span>
-                      <Link
-                        href={`/admin/workspace/screenings?category=${p.category}`}
-                        className="text-sm font-medium text-amber-400 hover:underline"
-                      >
-                        Setup →
-                      </Link>
-                    </div>
-                  )}
-                </div>
-                {/* Applicants */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">Applicants</div>
-                  <div className="text-lg font-bold text-white">
-                    {(p as any).applicantCount || 0}
-                  </div>
-                </div>
-                {/* Active Workers */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <div className="text-xs text-slate-500 mb-1">
-                    Active Workers
-                  </div>
-                  <div className="text-lg font-bold text-cyan-400">
-                    {(p as any).activeWorkerCount || 0}
-                  </div>
-                </div>
-              </div>
-
-              {/* PATCH_79: Screening Banner - Only show if screening is required */}
-              {p.hasScreening && (
-                <div className="mt-3 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                  <p className="text-xs text-purple-300 flex items-center gap-2">
-                    <span>🔒</span>
-                    Workers must pass screening before they can work on projects
-                  </p>
-                </div>
-              )}
-
-              {/* View Workers Pipeline */}
-              <div className="mt-4">
-                <Link
-                  href={`/admin/workforce?position=${p._id}`}
-                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 rounded-lg hover:bg-cyan-500/20 transition-colors"
-                >
-                  <span>👥</span>
-                  View Workers in Pipeline →
-                </Link>
-              </div>
-
-              {p.description && (
-                <p className="mt-3 text-sm text-slate-200">{p.description}</p>
-              )}
-
-              {/* PATCH_79: Secondary Actions - De-emphasized */}
-              <details className="mt-4">
-                <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-300">
-                  Advanced: Edit or Deactivate
-                </summary>
-                <div className="mt-2 flex gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    className="btn-secondary text-xs"
-                    onClick={() => toggleActive(p)}
-                  >
-                    {p.active === false ? "Activate" : "Deactivate"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary text-xs"
-                    onClick={() => openEdit(p)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary text-xs"
-                    onClick={() => remove(p)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </details>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {modalOpen && (
-        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#020617] shadow-[0_30px_80px_rgba(0,0,0,0.6)]">
-            <div className="p-5 border-b border-white/10 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-white font-semibold">
-                  {draft._id ? "Edit position" : "New position"}
-                </p>
-                <p className="text-xs text-[#9CA3AF] mt-1">
-                  Fields are sanitized server-side.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="text-[#9CA3AF] hover:text-white"
-                aria-label="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="block text-xs text-[#9CA3AF]">Title</label>
-                  <input
-                    className="u-input mt-2"
-                    value={draft.title}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, title: e.target.value }))
-                    }
-                    placeholder="KYC / Onboarding Assistant"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[#9CA3AF]">
-                    Category
-                  </label>
-                  <input
-                    className="u-input mt-2"
-                    value={draft.category}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, category: e.target.value }))
-                    }
-                    list="work-position-categories"
-                    placeholder="operations_support"
-                  />
-                  <datalist id="work-position-categories">
-                    {categories.map((c) => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#9CA3AF]">
-                  Description
-                </label>
-                <textarea
-                  className="u-input mt-2 min-h-[90px]"
-                  value={draft.description}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, description: e.target.value }))
-                  }
-                  placeholder="Short overview of the role"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#9CA3AF]">
-                  Requirements
-                </label>
-                <textarea
-                  className="u-input mt-2 min-h-[120px]"
-                  value={draft.requirements}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, requirements: e.target.value }))
-                  }
-                  placeholder="One per line recommended"
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-200">
-                  <input
-                    type="checkbox"
-                    checked={draft.active}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, active: e.target.checked }))
-                    }
-                  />
-                  Active
-                </label>
-
-                <div>
-                  <label className="block text-xs text-[#9CA3AF]">
-                    Sort order
-                  </label>
-                  <input
-                    className="u-input mt-2"
-                    type="number"
-                    value={draft.sortOrder}
-                    onChange={(e) =>
-                      setDraft((d) => ({
-                        ...d,
-                        sortOrder: Number(e.target.value),
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-white/10 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="btn-secondary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={saving}
-                className="btn-primary disabled:opacity-60"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      {loading ? <p role="status">Loading roles…</p> : !visible.length ? <div className={panel}><p>{error ? "Roles could not be displayed." : rows.length ? "No roles match these filters." : "No specializations have been created."}</p></div> :
+        <ul className="grid gap-3 md:grid-cols-2">{visible.map(role => <li className={panel + " min-w-0"} key={role._id}>
+          <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : role.isSpecialization === false ? "Outside role directory" : "Active"}</span></div>
+          <p className="mt-1 text-sm text-slate-400">{role.category} · Display order {role.sortOrder ?? 0}</p>
+          {notes.has(role._id) && <ul aria-label="Role review notes" className="mt-2 list-inside list-disc text-sm text-amber-200">
+            {notes.get(role._id)?.map(note => <li key={note}>{note}</li>)}</ul>}
+          {role.description && <p className="mt-3 whitespace-pre-wrap break-words text-sm">{role.description}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-2"><Link className="btn-primary" href={`/admin/work-positions/${role._id}`}>Manage specialization</Link>
+            <button className="btn-secondary" type="button" disabled={busy} onClick={() => edit(role)}>Edit details</button>
+            <button className="btn-secondary" type="button" disabled={busy} onClick={() => mutate("toggle", role)}>{role.active === false ? "Activate" : "Deactivate"}</button>
+            <button className="text-sm text-rose-300" type="button" disabled={busy} onClick={() => mutate("delete", role)}>Delete role</button></div>
+        </li>)}</ul>}
+      {error && <button className="btn-secondary mt-3" type="button" onClick={() => {setError(""); reload();}}>Reload roles</button>}
+    </>}
+  </div>;
 }

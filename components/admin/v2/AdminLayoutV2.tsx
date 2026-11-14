@@ -12,31 +12,44 @@
  */
 
 import type { ReactNode } from "react";
-import { useEffect, useState, createContext, useContext } from "react";
+import { useEffect, useState, useCallback, createContext, useContext, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import CommandRail from "@/components/admin/v2/CommandRail";
 import ContextBar from "@/components/admin/v2/ContextBar";
-import { apiRequest } from "@/lib/api";
+import { ADMIN_DATA_CHANGED_EVENT, apiRequest } from "@/lib/api";
 
 // Admin Context for sharing state across admin pages
 interface AdminContextType {
   badges: BadgeCounts;
+  summary: OperationsSummary | null;
+  summaryError: boolean;
   refreshBadges: () => Promise<void>;
   railCollapsed: boolean;
   setRailCollapsed: (collapsed: boolean) => void;
 }
 
-interface BadgeCounts {
+export interface BadgeCounts {
   pendingOrders: number;
   pendingProofs: number;
   openTickets: number;
-  pendingPayments: number;
+  pendingTopups: number;
   pendingApplications: number;
   stuckOrders: number;
   invalidScreenings: number;
-  pendingWithdrawals: number;
+  walletWithdrawals: number;
+  referralWithdrawals: number;
 }
+
+interface OperationsSummary {
+  marketplace: { published: number; drafts: number; activeRentals: number; sales: number };
+  projects: number; datasets: number; approvedSubmissions: number; pendingReviews: number; users: number;
+  badges: BadgeCounts;
+}
+const emptyBadges: BadgeCounts = {
+  pendingOrders: 0, pendingProofs: 0, openTickets: 0, pendingTopups: 0,
+  pendingApplications: 0, stuckOrders: 0, invalidScreenings: 0, walletWithdrawals: 0, referralWithdrawals: 0,
+};
 
 const AdminContext = createContext<AdminContextType | null>(null);
 
@@ -54,138 +67,84 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
   const { ready, isLoggedIn, isAdmin } = useAuth();
 
   const [railCollapsed, setRailCollapsed] = useState(false);
-  const [badges, setBadges] = useState<BadgeCounts>({
-    pendingOrders: 0,
-    pendingProofs: 0,
-    openTickets: 0,
-    pendingPayments: 0,
-    pendingApplications: 0,
-    stuckOrders: 0,
-    invalidScreenings: 0,
-    pendingWithdrawals: 0,
-  });
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeMobile = () => {
+    setMobileOpen(false);
+    requestAnimationFrame(() => menuButton.current?.focus());
+  };
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const onResize = () => { if (desktop.matches) setMobileOpen(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMobile();
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(document.querySelectorAll<HTMLElement>('#admin-navigation a[href], #admin-navigation button, #admin-navigation input'))
+        .filter(element => element.getClientRects().length > 0);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    const closeButton = document.querySelector<HTMLButtonElement>('#admin-navigation [aria-label="Close admin navigation"]');
+    closeButton?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    desktop.addEventListener("change", onResize);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      desktop.removeEventListener("change", onResize);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
+  const [summary, setSummary] = useState<OperationsSummary | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
+  const latest = useRef(0);
+  const badges = summary?.badges ?? emptyBadges;
 
   // Auth check
   useEffect(() => {
     if (!ready) return;
     if (!isLoggedIn) {
-      router.replace("/login");
+      const destination = pathname + window.location.search + window.location.hash;
+      router.replace("/login?next=" + encodeURIComponent(destination));
       return;
     }
     if (!isAdmin) {
       router.replace("/dashboard");
     }
-  }, [ready, isLoggedIn, isAdmin, router]);
+  }, [ready, isLoggedIn, isAdmin, router, pathname]);
 
-  // Load badge counts
-  const refreshBadges = async () => {
+  const refreshBadges = useCallback(async () => {
+    const sequence = ++latest.current;
     try {
-      // Parallel fetch all counts
-      const [
-        ordersRes,
-        ticketsRes,
-        proofsRes,
-        appsRes,
-        screeningsRes,
-        affiliateRes,
-      ] = await Promise.allSettled([
-        apiRequest("/api/admin/orders", "GET", null, true),
-        apiRequest("/api/admin/tickets", "GET", null, true),
-        apiRequest("/api/admin/proofs", "GET", null, true),
-        apiRequest("/api/apply-work/admin", "GET", null, true),
-        apiRequest("/api/admin/workspace/screenings", "GET", null, true),
-        apiRequest("/api/admin/affiliate/withdrawals", "GET", null, true),
-      ]);
-
-      const newBadges: BadgeCounts = {
-        pendingOrders: 0,
-        pendingProofs: 0,
-        openTickets: 0,
-        pendingPayments: 0,
-        pendingApplications: 0,
-        stuckOrders: 0,
-        invalidScreenings: 0,
-        pendingWithdrawals: 0,
-      };
-
-      // Orders
-      if (ordersRes.status === "fulfilled") {
-        const orders = Array.isArray(ordersRes.value)
-          ? ordersRes.value
-          : ordersRes.value?.orders || [];
-        newBadges.pendingOrders = orders.filter(
-          (o: any) => o.status === "pending" || o.status === "payment_pending",
-        ).length;
-        newBadges.pendingPayments = orders.filter(
-          (o: any) => o.status === "payment_pending",
-        ).length;
-        newBadges.stuckOrders = orders.filter((o: any) => {
-          if (o.status !== "in_progress") return false;
-          const updated = new Date(o.updatedAt);
-          const now = new Date();
-          const hoursDiff =
-            (now.getTime() - updated.getTime()) / (1000 * 60 * 60);
-          return hoursDiff > 48; // Stuck if no update in 48 hours
-        }).length;
-      }
-
-      // Tickets
-      if (ticketsRes.status === "fulfilled") {
-        newBadges.openTickets = ticketsRes.value?.stats?.open || 0;
-      }
-
-      // Proofs
-      if (proofsRes.status === "fulfilled") {
-        const proofs = proofsRes.value?.proofs || [];
-        newBadges.pendingProofs = proofs.filter(
-          (p: any) => p.status === "pending",
-        ).length;
-      }
-
-      // Applications
-      if (appsRes.status === "fulfilled") {
-        const apps = Array.isArray(appsRes.value)
-          ? appsRes.value
-          : appsRes.value?.applications || [];
-        newBadges.pendingApplications = apps.filter(
-          (a: any) => a.status === "pending",
-        ).length;
-      }
-
-      // Invalid screenings (0 questions)
-      if (screeningsRes.status === "fulfilled") {
-        const screenings = Array.isArray(screeningsRes.value)
-          ? screeningsRes.value
-          : screeningsRes.value?.screenings || [];
-        newBadges.invalidScreenings = screenings.filter(
-          (s: any) => !s.questions || s.questions.length === 0,
-        ).length;
-      }
-
-      // Pending withdrawals
-      if (affiliateRes.status === "fulfilled") {
-        const withdrawals = Array.isArray(affiliateRes.value)
-          ? affiliateRes.value
-          : affiliateRes.value?.withdrawals || [];
-        newBadges.pendingWithdrawals = withdrawals.filter(
-          (w: any) => w.status === "pending",
-        ).length;
-      }
-
-      setBadges(newBadges);
-    } catch (err) {
-      console.error("Failed to refresh badges:", err);
+      const next = await apiRequest<OperationsSummary>("/api/admin/operations-summary", "GET", null, true);
+      if (sequence === latest.current) { setSummary(next); setSummaryError(false); }
+    } catch {
+      if (sequence === latest.current) setSummaryError(true);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (ready && isLoggedIn && isAdmin) {
-      refreshBadges();
-      // Refresh every 30 seconds
-      const interval = setInterval(refreshBadges, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [ready, isLoggedIn, isAdmin]);
+    if (!ready || !isLoggedIn || !isAdmin) return;
+    void refreshBadges();
+    const timer = window.setInterval(refreshBadges, 30000);
+    let afterWrite: number | undefined;
+    const onWrite = () => {
+      window.clearTimeout(afterWrite);
+      afterWrite = window.setTimeout(refreshBadges, 150);
+    };
+    window.addEventListener(ADMIN_DATA_CHANGED_EVENT, onWrite);
+    window.addEventListener("focus", refreshBadges);
+    return () => {
+      latest.current++;
+      window.clearInterval(timer);
+      window.clearTimeout(afterWrite);
+      window.removeEventListener(ADMIN_DATA_CHANGED_EVENT, onWrite);
+      window.removeEventListener("focus", refreshBadges);
+    };
+  }, [ready, isLoggedIn, isAdmin, refreshBadges]);
 
   // Loading state
   if (!ready) {
@@ -209,7 +168,7 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
   }
 
   const contextValue: AdminContextType = {
-    badges,
+    badges, summary, summaryError,
     refreshBadges,
     railCollapsed,
     setRailCollapsed,
@@ -217,24 +176,38 @@ export default function AdminLayoutV2({ children }: { children: ReactNode }) {
 
   return (
     <AdminContext.Provider value={contextValue}>
-      <div className="min-h-screen bg-[#050810] flex">
+      <div className="min-h-screen bg-[#0c1318] flex">
+        <a href="#admin-content" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-2 focus:z-[60] focus:rounded focus:bg-white focus:p-3 focus:text-black">Skip to admin content</a>
         {/* Command Rail */}
         <CommandRail
-          collapsed={railCollapsed}
+          collapsed={railCollapsed && !mobileOpen}
           onToggle={() => setRailCollapsed(!railCollapsed)}
+          mobileOpen={mobileOpen}
+          onCloseMobile={closeMobile}
           badges={badges}
         />
+        {mobileOpen && (
+          <button type="button" tabIndex={-1} aria-label="Dismiss navigation overlay" onClick={closeMobile}
+            className="fixed inset-0 z-40 bg-black/60 lg:hidden" />
+        )}
 
         {/* Main Content Area */}
         <div
-          className={`flex-1 flex flex-col transition-all duration-300
-                     ${railCollapsed ? "ml-16" : "ml-64"}`}
+          inert={mobileOpen}
+          className={`min-w-0 flex-1 flex flex-col transition-all duration-300
+                     ${railCollapsed ? "lg:ml-16" : "lg:ml-64"}`}
         >
           {/* Context Bar */}
-          <ContextBar />
+          <ContextBar menuButton={
+            <button type="button" ref={menuButton} aria-controls="admin-navigation"
+              aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}
+              className="rounded border border-white/15 px-3 py-2 text-sm text-white lg:hidden">
+              Admin menu
+            </button>
+          } />
 
           {/* Page Content */}
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main id="admin-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
         </div>
       </div>
     </AdminContext.Provider>

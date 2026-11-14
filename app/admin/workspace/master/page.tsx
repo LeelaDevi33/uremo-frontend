@@ -649,7 +649,7 @@ export default function MasterWorkspacePage() {
                                       }`}
                                     >
                                       <Link
-                                        href={`/admin/workspace/screenings?id=${s._id}`}
+                                        href={`/admin/workspace/screenings/${s._id}`}
                                         className="text-sm text-white hover:text-cyan-400 truncate flex items-center gap-2"
                                       >
                                         {s.title}
@@ -708,7 +708,7 @@ export default function MasterWorkspacePage() {
                                     className="flex items-center justify-between bg-slate-800/50 rounded-lg p-2"
                                   >
                                     <Link
-                                      href={`/admin/workspace/projects?id=${p._id}`}
+                                      href={`/admin/workspace/projects?action=view&id=${p._id}`}
                                       className="text-sm text-white hover:text-purple-400 truncate"
                                     >
                                       {p.title}

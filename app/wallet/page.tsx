@@ -5,9 +5,10 @@
  * Trust-building, secure, professional wallet experience
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import WalletFundingDialog from "./WalletFundingDialog";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
@@ -15,22 +16,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { EmojiWallet } from "@/components/ui/Emoji";
 
 // ==================== SVG ICONS ====================
-const IconShield = () => (
-  <svg
-    className="w-5 h-5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
-    />
-  </svg>
-);
-
 const IconWallet = () => (
   <svg
     className="w-7 h-7"
@@ -95,22 +80,6 @@ const IconArrowDown = () => (
   </svg>
 );
 
-const IconLock = () => (
-  <svg
-    className="w-4 h-4"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-    />
-  </svg>
-);
-
 const IconHistory = () => (
   <svg
     className="w-5 h-5"
@@ -127,38 +96,6 @@ const IconHistory = () => (
   </svg>
 );
 
-const IconInfo = () => (
-  <svg
-    className="w-5 h-5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
-    />
-  </svg>
-);
-
-const IconCheck = () => (
-  <svg
-    className="w-4 h-4"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M4.5 12.75l6 6 9-13.5"
-    />
-  </svg>
-);
-
 interface Transaction {
   _id: string;
   type: "credit" | "debit";
@@ -171,13 +108,15 @@ interface Transaction {
   // PATCH_82: Added paid_unverified for PayPal
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
+  providerRef?: string;
+  methodName?: string;
+  paymentReference?: string;
   failureReason?: string;
 }
 
-interface WalletStats {
-  totalCredits: number;
-  totalDebits: number;
-  transactionCount: number;
+async function confirmPayPalPayment(orderId: string) {
+  const result = await apiRequest<{ success: boolean; status: string }>("/api/wallet/topup/paypal/confirm", "POST", { paypalOrderId: orderId }, true);
+  if (!result.success || result.status !== "success") throw new Error("Your wallet credit is awaiting confirmation.");
 }
 
 export default function WalletPage() {
@@ -186,180 +125,88 @@ export default function WalletPage() {
   const { ready, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
+  const [walletTotal, setWalletTotal] = useState(0);
+  const [withdrawable, setWithdrawable] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPages, setHistoryPages] = useState(1);
+  const [transactionCount, setTransactionCount] = useState(0);
+  const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState("");
-  const [topUpLoading, setTopUpLoading] = useState(false);
-  // PATCH_82: PayPal state
-  const [paypalAvailable, setPaypalAvailable] = useState(false);
-  const [paypalLoading, setPaypalLoading] = useState(false);
-  const [stats, setStats] = useState<WalletStats>({
-    totalCredits: 0,
-    totalDebits: 0,
-    transactionCount: 0,
-  });
+  const [returnError, setReturnError] = useState("");
+  const [verifyingId, setVerifyingId] = useState("");
+  const [returnAttempt, setReturnAttempt] = useState(0);
+  const activeReturn = useRef("");
+  const historyRequest = useRef(0);
+  const fetchData = useCallback(async () => {
+    const request = ++historyRequest.current;
+    try {
+      const [balanceRes, txRes] = await Promise.all([
+        apiRequest("/api/wallet/balance", "GET"),
+        apiRequest("/api/wallet/transactions?page=" + historyPage, "GET"),
+      ]);
+      if (request !== historyRequest.current) return;
+      setLoadError("");
+      setBalance(balanceRes.spendable ?? balanceRes.balance ?? 0);
+      setWalletTotal(balanceRes.balance ?? 0);
+      setWithdrawable(balanceRes.withdrawable ?? 0);
+      setTransactions(txRes.transactions);
+      setTransactionCount(txRes.pagination.total);
+      setHistoryPages(Math.max(1, txRes.pagination.pages));
+    } catch (cause) {
+      if (request === historyRequest.current) setLoadError(cause instanceof Error ? cause.message : "Could not load your wallet.");
+    } finally {
+      if (request === historyRequest.current) setLoading(false);
+    }
+  }, [historyPage]);
 
   useEffect(() => {
     if (!ready) return;
     if (!isAuthenticated) {
-      router.push("/login");
+      router.replace("/login?next=" + encodeURIComponent("/wallet" + window.location.search));
       return;
     }
-    fetchData();
-    checkPayPalAvailability(); // PATCH_82
-    handlePayPalReturn(); // PATCH_82
-  }, [ready, isAuthenticated, router]);
-
-  // PATCH_82: Check if PayPal is available
-  const checkPayPalAvailability = async () => {
-    try {
-      const res = await apiRequest("/api/wallet/topup/paypal/available", "GET");
-      setPaypalAvailable(res.available || false);
-    } catch {
-      setPaypalAvailable(false);
-    }
-  };
-
-  // PATCH_82: Handle PayPal return URL params
-  const handlePayPalReturn = async () => {
+    void fetchData();
     const params = new URLSearchParams(window.location.search);
-    const paypalStatus = params.get("paypal");
-    const token = params.get("token"); // PayPal order ID in URL
-
-    if (paypalStatus === "success" && token) {
-      toast("Confirming PayPal payment...", "info");
+    const state = params.get("paypal");
+    const orderId = params.get("token");
+    if (state !== "success" || !orderId) {
+      if (state === "cancelled") {
+        toast("PayPal checkout cancelled.", "info");
+        window.history.replaceState(null, "", "/wallet");
+      }
+      if (state === "success") setReturnError("PayPal did not return an order ID. Check your wallet history or contact support.");
+      return;
+    }
+    const key = orderId + ":" + returnAttempt;
+    if (activeReturn.current === key) return;
+    activeReturn.current = key;
+    setReturnError("");
+    async function confirm(id: string) {
       try {
-        const res = await apiRequest(
-          "/api/wallet/topup/paypal/confirm",
-          "POST",
-          {
-            paypalOrderId: token,
-          },
-        );
-        if (res.alreadyConfirmed || res.alreadyProcessed) {
-          toast("Payment already processed", "info");
-        } else {
-          toast(
-            "PayPal payment confirmed! Awaiting admin verification.",
-            "success",
-          );
-        }
-        fetchData();
-      } catch (err: any) {
-        toast(err.message || "Failed to confirm PayPal payment", "error");
-      }
-      // Clear URL params
-      window.history.replaceState({}, "", "/wallet");
-    } else if (paypalStatus === "cancelled") {
-      toast("PayPal payment was cancelled", "info");
-      window.history.replaceState({}, "", "/wallet");
+        await confirmPayPalPayment(id);
+        window.history.replaceState(null, "", "/wallet");
+        toast("PayPal payment confirmed. Your wallet has been credited.", "success");
+      } catch (cause) {
+        setReturnError(cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.");
+      } finally { await fetchData(); }
     }
-  };
+    void confirm(orderId);
+  }, [ready, isAuthenticated, router, toast, returnAttempt, fetchData]);
 
-  const fetchData = async () => {
+  async function verifyPayment(providerRef: string) {
+    if (verifyingId) return;
+    setVerifyingId(providerRef);
     try {
-      const [balanceRes, txRes] = await Promise.all([
-        apiRequest("/api/wallet/balance", "GET"),
-        apiRequest("/api/wallet/transactions", "GET"),
-      ]);
-      setBalance(balanceRes.balance || 0);
-      const txList = txRes.transactions || [];
-      setTransactions(txList);
-
-      // Calculate stats
-      const credits = txList
-        .filter((t: Transaction) => t.type === "credit")
-        .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-      const debits = txList
-        .filter((t: Transaction) => t.type === "debit")
-        .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
-      setStats({
-        totalCredits: credits,
-        totalDebits: debits,
-        transactionCount: txList.length,
-      });
-    } catch (err: any) {
-      toast(err.message || "Failed to load wallet", "error");
+      await confirmPayPalPayment(providerRef);
+      toast("PayPal payment confirmed. Your wallet has been credited.", "success");
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "Could not verify the PayPal payment.", "error");
     } finally {
-      setLoading(false);
+      await fetchData();
+      setVerifyingId("");
     }
-  };
-
-  const handleTopUp = async () => {
-    const amount = parseFloat(topUpAmount);
-    if (!amount || amount < 1) {
-      toast("Minimum top-up amount is $1", "error");
-      return;
-    }
-
-    // PATCH_81: Prevent double-click
-    if (topUpLoading) {
-      return;
-    }
-
-    setTopUpLoading(true);
-    try {
-      const res = await apiRequest("/api/wallet/topup", "POST", { amount });
-      // PATCH_80: Topup now creates pending transaction, not instant credit
-      if (res.status === "initiated") {
-        toast("Top-up request submitted. Pending verification.", "info");
-      } else {
-        toast(res.message || "Top-up submitted!", "success");
-      }
-      // Balance doesn't change immediately - keep current balance
-      setBalance(res.currentBalance || balance);
-      setShowTopUp(false);
-      setTopUpAmount("");
-      fetchData(); // Refresh to show pending transaction
-    } catch (err: any) {
-      // PATCH_81: Handle duplicate request gracefully
-      if (err.retryAfter) {
-        toast("Request already submitted - please wait", "info");
-        setShowTopUp(false);
-        fetchData();
-      } else {
-        toast(err.message || "Top-up failed", "error");
-      }
-    } finally {
-      setTopUpLoading(false);
-    }
-  };
-
-  // PATCH_82: Handle PayPal top-up
-  const handlePayPalTopUp = async () => {
-    const amount = parseFloat(topUpAmount);
-    if (!amount || amount < 1) {
-      toast("Minimum top-up amount is $1", "error");
-      return;
-    }
-
-    if (paypalLoading) return;
-
-    setPaypalLoading(true);
-    try {
-      const res = await apiRequest("/api/wallet/topup/paypal/create", "POST", {
-        amount,
-      });
-
-      if (res.approvalUrl) {
-        toast("Redirecting to PayPal...", "info");
-        // Redirect to PayPal approval page
-        window.location.href = res.approvalUrl;
-      } else {
-        toast("Failed to get PayPal approval URL", "error");
-      }
-    } catch (err: any) {
-      if (err.retryAfter) {
-        toast("Request already submitted - please wait", "info");
-        setShowTopUp(false);
-        fetchData();
-      } else {
-        toast(err.message || "PayPal top-up failed", "error");
-      }
-    } finally {
-      setPaypalLoading(false);
-    }
-  };
+  }
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
@@ -437,6 +284,12 @@ export default function WalletPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        {loadError && <div role="alert" className="mb-4 rounded-lg border border-amber-600/50 p-3 text-amber-200">
+          {loadError} <button className="ml-2 underline" onClick={fetchData}>Reload wallet</button>
+        </div>}
+        {returnError && <div role="alert" className="mb-4 rounded-lg border border-amber-600/50 p-3 text-amber-200">
+          {returnError} {activeReturn.current && <button className="ml-2 underline" onClick={() => setReturnAttempt(value => value + 1)}>Check payment again</button>}
+        </div>}
         {/* ===== HEADER WITH SECURITY BADGE ===== */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -447,13 +300,8 @@ export default function WalletPage() {
             <h1 className="text-3xl font-bold text-white flex items-center gap-2">
               <EmojiWallet /> My Wallet
             </h1>
-            <p className="text-slate-400 mt-1">Manage your balance securely</p>
-          </div>
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-2">
-            <IconShield />
-            <span className="text-sm text-emerald-400 font-medium">
-              256-bit Encrypted
-            </span>
+            <Link href="/finance/withdrawals" className="mt-2 inline-flex text-sm text-teal-300 underline underline-offset-4">Withdraw earnings</Link>
+
           </div>
         </motion.div>
 
@@ -499,15 +347,11 @@ export default function WalletPage() {
                 <p className="text-emerald-100 text-sm font-medium">
                   Available Balance
                 </p>
-                <div className="flex items-center gap-2">
-                  <IconLock />
-                  <span className="text-xs text-emerald-200">Secure</span>
-                </div>
               </div>
             </div>
 
             <p className="text-5xl font-bold tracking-tight mb-6">
-              ${balance.toFixed(2)}
+              {loadError ? "—" : "$" + balance.toFixed(2)}
               <span className="text-lg font-normal text-emerald-200 ml-2">
                 USD
               </span>
@@ -522,7 +366,7 @@ export default function WalletPage() {
                 Add Balance
               </button>
               <Link
-                href="/explore-services"
+                href="/projects/full-access"
                 className="flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl font-medium hover:bg-white/30 transition-all border border-white/20"
               >
                 Use Balance
@@ -536,28 +380,28 @@ export default function WalletPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-3 gap-4 mb-8"
+          className="grid grid-cols-2 gap-3 mb-8 sm:grid-cols-3"
         >
           <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-800">
             <div className="flex items-center gap-2 text-emerald-400 mb-2">
               <IconArrowDown />
               <span className="text-xs font-medium uppercase tracking-wide">
-                Total In
+                Wallet total
               </span>
             </div>
             <p className="text-xl font-bold text-white">
-              ${stats.totalCredits.toFixed(2)}
+              {loadError ? "—" : "$" + walletTotal.toFixed(2)}
             </p>
           </div>
           <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-800">
             <div className="flex items-center gap-2 text-orange-400 mb-2">
               <IconArrowUp />
               <span className="text-xs font-medium uppercase tracking-wide">
-                Total Out
+                Withdrawable
               </span>
             </div>
             <p className="text-xl font-bold text-white">
-              ${stats.totalDebits.toFixed(2)}
+              {loadError ? "—" : "$" + withdrawable.toFixed(2)}
             </p>
           </div>
           <div className="bg-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-800">
@@ -568,157 +412,16 @@ export default function WalletPage() {
               </span>
             </div>
             <p className="text-xl font-bold text-white">
-              {stats.transactionCount}
+              {transactionCount}
             </p>
           </div>
         </motion.div>
 
-        {/* ===== TOP-UP MODAL ===== */}
-        <AnimatePresence>
-          {showTopUp && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-              onClick={() => setShowTopUp(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl"
-              >
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400">
-                    <IconPlus />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">Add Balance</h2>
-                    <p className="text-sm text-slate-400">
-                      Secure payment processing
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm text-slate-300 mb-2 font-medium">
-                    Amount (USD)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      value={topUpAmount}
-                      onChange={(e) => setTopUpAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-slate-800 border border-slate-600 rounded-xl pl-10 pr-4 py-4 text-white text-2xl font-bold focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Quick amounts */}
-                <div className="grid grid-cols-4 gap-2 mb-6">
-                  {[10, 25, 50, 100].map((amt) => (
-                    <button
-                      key={amt}
-                      onClick={() => setTopUpAmount(String(amt))}
-                      className={`py-3 rounded-xl text-sm font-medium transition-all ${
-                        topUpAmount === String(amt)
-                          ? "bg-emerald-600 text-white"
-                          : "bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300"
-                      }`}
-                    >
-                      ${amt}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowTopUp(false);
-                      setTopUpAmount("");
-                    }}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700 rounded-xl py-3 font-medium transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleTopUp}
-                    disabled={topUpLoading || !topUpAmount}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 rounded-xl py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                  >
-                    {topUpLoading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <IconCheck />
-                        Add ${topUpAmount || "0"}
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* PATCH_82: PayPal Top-up Option */}
-                {paypalAvailable && (
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="flex-1 h-px bg-slate-700"></div>
-                      <span className="text-xs text-slate-500">
-                        or pay with
-                      </span>
-                      <div className="flex-1 h-px bg-slate-700"></div>
-                    </div>
-                    <button
-                      onClick={handlePayPalTopUp}
-                      disabled={
-                        paypalLoading ||
-                        !topUpAmount ||
-                        parseFloat(topUpAmount) < 1
-                      }
-                      className="w-full bg-[#0070BA] hover:bg-[#005EA6] rounded-xl py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-white"
-                    >
-                      {paypalLoading ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Connecting to PayPal...
-                        </>
-                      ) : (
-                        <>
-                          <svg
-                            className="w-5 h-5"
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                          >
-                            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944 3.72a.788.788 0 0 1 .778-.656h6.669c2.22 0 3.987.6 5.067 1.726 1.006 1.05 1.37 2.51 1.08 4.336-.018.115-.038.23-.06.345-.5 2.6-2.11 4.5-4.625 5.467a9.02 9.02 0 0 1-3.24.487H8.74l-.614 4.07a.641.641 0 0 1-.633.54l-.417.002zm1.445-9.143h1.937c2.152 0 3.612-1.295 3.973-3.517.18-1.1-.02-1.984-.576-2.564-.545-.568-1.417-.839-2.584-.839H8.81l-.72 4.786.43 2.134z" />
-                          </svg>
-                          Pay with PayPal
-                        </>
-                      )}
-                    </button>
-                    <p className="text-xs text-slate-500 text-center mt-2">
-                      International payments accepted
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-500">
-                  <IconLock />
-                  <span>Secured with 256-bit SSL encryption</span>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {showTopUp && <WalletFundingDialog onClose={() => setShowTopUp(false)} onSubmitted={() => {
+          setShowTopUp(false);
+          toast("Transfer submitted for verification.", "success");
+          void fetchData();
+        }} />}
 
         {/* ===== TRANSACTION HISTORY ===== */}
         <motion.div
@@ -733,21 +436,20 @@ export default function WalletPage() {
               <h2 className="text-lg font-semibold">Transaction History</h2>
             </div>
             <span className="text-sm text-slate-400">
-              {transactions.length} transactions
+              {transactionCount} transactions
             </span>
           </div>
 
-          {transactions.length === 0 ? (
+          {loadError ? null : transactions.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-emerald-500/20 to-teal-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
                 <IconHistory />
               </div>
               <h3 className="text-lg font-semibold mb-2">
-                Your wallet is empty
+                No transactions yet
               </h3>
               <p className="text-slate-400 text-sm mb-6 max-w-sm mx-auto">
-                Add funds to your wallet to purchase services instantly, or earn
-                money by working on tasks.
+                Fund your wallet to rent an eligible project or purchase exclusive access.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
                 <button
@@ -773,7 +475,7 @@ export default function WalletPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors ${
+                  className={`p-4 flex flex-wrap gap-3 items-center justify-between hover:bg-slate-800/30 transition-colors ${
                     tx.status && tx.status !== "success" ? "opacity-75" : ""
                   }`}
                 >
@@ -805,6 +507,8 @@ export default function WalletPage() {
                           : tx.description || getSourceLabel(tx.source)}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">
+                        {tx.methodName && <span className="block">{tx.methodName}</span>}
+                        {tx.paymentReference && <span className="block break-all">Transfer reference: {tx.paymentReference}</span>}
                         {new Date(tx.createdAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
@@ -813,6 +517,9 @@ export default function WalletPage() {
                           minute: "2-digit",
                         })}
                       </p>
+                      {tx.provider === "paypal" && tx.source === "topup" && tx.status === "paid_unverified" && tx.providerRef && /^[A-Z0-9]{1,36}$/.test(tx.providerRef) &&
+                        <button type="button" disabled={!!verifyingId} className="mt-2 text-sm text-teal-300 underline disabled:opacity-50"
+                          onClick={() => void verifyPayment(tx.providerRef!)}>{verifyingId === tx.providerRef ? "Verifying…" : "Verify PayPal payment"}</button>}
                     </div>
                   </div>
                   <div className="text-right">
@@ -848,61 +555,11 @@ export default function WalletPage() {
           )}
         </motion.div>
 
-        {/* ===== INFO CARD ===== */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-6 bg-slate-900/50 rounded-xl p-5 border border-slate-800"
-        >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 flex-shrink-0">
-              <IconInfo />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">How to use your wallet</h3>
-              <ul className="text-sm text-slate-400 space-y-1.5">
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  Add balance securely using the button above
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  Use wallet balance for instant checkout on services
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  Earn balance from work, referrals, and refunds
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                  All transactions are encrypted and secure
-                </li>
-              </ul>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* ===== FOOTER TRUST ===== */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-8 flex items-center justify-center gap-6 text-xs text-slate-500"
-        >
-          <div className="flex items-center gap-1.5">
-            <IconShield />
-            <span>Bank-level Security</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <IconLock />
-            <span>SSL Encrypted</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <IconCheck />
-            <span>PCI Compliant</span>
-          </div>
-        </motion.div>
+        {historyPages > 1 && <nav aria-label="Wallet history pages" className="mt-4 flex items-center justify-between gap-3">
+          <button className="underline disabled:opacity-40" disabled={historyPage <= 1} onClick={() => setHistoryPage(page => page - 1)}>Previous page</button>
+          <span>Page {historyPage} of {historyPages}</span>
+          <button className="underline disabled:opacity-40" disabled={historyPage >= historyPages} onClick={() => setHistoryPage(page => page + 1)}>Next page</button>
+        </nav>}
       </div>
     </div>
   );

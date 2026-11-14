@@ -3,15 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { getJobRoleCategoryLabel } from "@/lib/categoryLabels"; // PATCH_72
 import ConfirmModal from "@/components/admin/v2/ConfirmModal";
 import {
   ActionBar,
   AuditTrail,
   StatusTooltip,
-  UndoToast,
-  useUndoToast,
 } from "@/components/admin/v2";
 
 /**
@@ -23,17 +21,26 @@ import {
 
 interface Project {
   _id: string;
+  revision?: string;
+  updatedAt?: string;
+  marketplaceReserved?: boolean;
   title: string;
   description: string;
   category: string;
   status: string;
-  priority: string;
+  priority?: string;
+  projectType?: string;
+  datasetId?: string | { _id: string; name: string } | null;
+  rewardPerTask?: number;
+  deliverables?: Deliverable[];
+  estimatedTasks?: number;
   assignedTo?: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
   };
-  earnings: number;
+  payRate: number;
   earningsCredited?: number; // PATCH_48: Track if earnings were credited
   completionNotes?: string; // PATCH_48: Worker's completion notes
   proofApproved?: boolean; // PATCH_73: Track if proof was approved
@@ -51,8 +58,9 @@ interface Worker {
   _id: string;
   userId: {
     _id: string;
-    firstName: string;
-    lastName: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
     email: string;
   };
   jobId: {
@@ -79,34 +87,75 @@ interface JobRole {
   active: boolean;
 }
 
+type Deliverable = { title: string; description: string; required: boolean };
+type DeliveryFields = { projectType: string; datasetId: string; rewardPerTask: number; estimatedTasks: number; deliverables: Deliverable[] };
+
+function ProjectDeliveryFields({ fields, datasets, onChange }: {
+  fields: DeliveryFields; datasets: { _id: string; name: string }[]; onChange: (change: Partial<DeliveryFields>) => void;
+}) {
+  return <fieldset className="space-y-3">
+    <legend className="font-medium">Work specification</legend>
+    <p className="text-sm text-slate-400">Deliverables the worker will see</p>
+    {fields.deliverables.map((item, i) => {
+      const changeItem = (patch: Partial<Deliverable>) => onChange({ deliverables: fields.deliverables.map((row, ix) => ix === i ? { ...row, ...patch } : row) });
+      return <fieldset key={i} className="border border-white/15 rounded p-3 space-y-2">
+        <legend>Deliverable {i + 1}</legend>
+        <label className="block">Title<input required className="input w-full" value={item.title} onChange={e => changeItem({ title: e.target.value })} /></label>
+        <label className="block">Description<textarea className="input w-full" value={item.description} onChange={e => changeItem({ description: e.target.value })} /></label>
+        <label className="block"><input type="checkbox" checked={item.required} onChange={e => changeItem({ required: e.target.checked })} /> Required</label>
+        <button type="button" className="btn-secondary" onClick={() => onChange({ deliverables: fields.deliverables.filter((_, ix) => ix !== i) })}>Remove deliverable {i + 1}</button>
+      </fieldset>;
+    })}
+    <button type="button" className="btn-secondary" onClick={() => onChange({ deliverables: [...fields.deliverables, { title: "", description: "", required: true }] })}>Add deliverable</button>
+    <label className="block">Estimated tasks
+      <input type="number" min="1" step="1" required className="input w-full" value={fields.estimatedTasks} onChange={e => onChange({ estimatedTasks: Number(e.target.value) })} />
+    </label>
+    <label className="block">Project type
+      <select className="input w-full" value={fields.projectType} onChange={e => onChange({ projectType: e.target.value, datasetId: "", rewardPerTask: 0 })}>
+        <option value="standard">Standard project</option><option value="rlhf_dataset">Dataset annotation</option>
+      </select>
+    </label>
+    {fields.projectType === "rlhf_dataset" && <>
+      <label className="block">Dataset
+        <select required className="input w-full" value={fields.datasetId} onChange={e => onChange({ datasetId: e.target.value })}>
+          <option value="">Choose a dataset</option>
+          {fields.datasetId && !datasets.some(row => row._id === fields.datasetId) && <option value={fields.datasetId}>Previously linked dataset</option>}
+          {datasets.map(row => <option key={row._id} value={row._id}>{row.name}</option>)}
+        </select>
+      </label>
+      <label className="block">Reward per task (USD)
+        <input type="number" min="0" step="0.01" required className="input w-full" value={fields.rewardPerTask} onChange={e => onChange({rewardPerTask: Number(e.target.value)})} />
+      </label>
+    </>}
+  </fieldset>;
+}
+
 function ProjectsContent() {
   const searchParams = useSearchParams();
   const showCreate = searchParams.get("action") === "create";
+  const linkedProject = searchParams.get("action") === "view" ? searchParams.get("id") : null;
   const categoryParam = searchParams.get("category");
-  const undoToast = useUndoToast();
+  const requestedWorker = searchParams.get("assignWorker");
 
   const [projects, setProjects] = useState<Project[]>([]);
-  const [workers, setWorkers] = useState<Worker[]>([]);
   const [screenings, setScreenings] = useState<Screening[]>([]); // PATCH_64: For linkage
   const [jobRoles, setJobRoles] = useState<JobRole[]>([]); // PATCH_86: Job roles
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(showCreate);
-  const [lastAssignedData, setLastAssignedData] = useState<{
-    projectId: string;
-    previousAssignee: string | null;
-  } | null>(null);
-  const [filter, setFilter] = useState<string>("all");
+  const [filter, setFilter] = useState<string>(requestedWorker ? "open" : "all");
   const [showLinkedScreenings, setShowLinkedScreenings] = useState(false); // PATCH_64
 
   // Create form state - PATCH_86: Added workPositionId
   const [form, setForm] = useState({
+    payType: "per_task", deliverables: [] as Deliverable[], screeningIds: [] as string[], instructions: "",
     title: "",
     description: "",
     category: categoryParam || "microjobs",
     priority: "medium",
-    earnings: 0,
+    estimatedTasks: 1,
+    payRate: 0,
     deadline: "",
     screeningId: "", // PATCH_65.1: Link to screening test
     workPositionId: "", // PATCH_86: Job Role ID
@@ -138,9 +187,11 @@ function ProjectsContent() {
   const [viewModal, setViewModal] = useState<Project | null>(null);
   const [editModal, setEditModal] = useState<Project | null>(null);
   const [editForm, setEditForm] = useState({
+    deliverables: [] as Deliverable[],
     title: "",
     description: "",
     category: "microjobs",
+    priority: "medium", projectType: "standard", datasetId: "", rewardPerTask: 0, estimatedTasks: 1,
     instructions: "",
     payRate: 0,
     payType: "per_task",
@@ -149,13 +200,31 @@ function ProjectsContent() {
     screeningId: "",
     screeningIds: [] as string[], // PATCH_88: Multiple screenings
   });
+  const [editError, setEditError] = useState("");
+  const [editConflict, setEditConflict] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewData, setViewData] = useState<any>(null);
 
   useEffect(() => {
+    if (!linkedProject) return;
+    if (!/^[a-f\d]{24}$/i.test(linkedProject)) {
+      setError("This project link contains an invalid ID.");
+      return;
+    }
+    let current = true;
+    apiRequest<{ project: Project }>(`/api/admin/workspace/project/${linkedProject}`, "GET", null, true)
+      .then((result) => {
+        if (!current) return;
+        setViewData(result);
+        setViewModal(result.project);
+      })
+      .catch((err) => { if (current) setError(err.message || "This project could not be opened."); });
+    return () => { current = false; };
+  }, [linkedProject]);
+
+  useEffect(() => {
     loadProjects();
-    loadWorkers();
     loadScreenings(); // PATCH_64
     loadJobRoles(); // PATCH_86
     loadDatasets(); // PATCH_95
@@ -174,27 +243,6 @@ function ProjectsContent() {
       setError(e.message || "Failed to load projects");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadWorkers = async () => {
-    try {
-      // PATCH_57: Load workers who are ready to work (ready_to_work or assigned status)
-      const res = await apiRequest<any>(
-        "/api/admin/workspace/workers?limit=200",
-        "GET",
-        null,
-        true,
-      );
-      // Filter to only workers who can receive tasks
-      const allWorkers = res.workers || [];
-      const readyWorkers = allWorkers.filter(
-        (w: any) =>
-          w.workerStatus === "ready_to_work" || w.workerStatus === "assigned",
-      );
-      setWorkers(readyWorkers);
-    } catch (e) {
-      console.error("Failed to load workers:", e);
     }
   };
 
@@ -242,7 +290,7 @@ function ProjectsContent() {
         : res.positions || res.data || [];
 
       if (normalized.length > 0) {
-        setJobRoles(normalized);
+        setJobRoles(normalized.filter((job: JobRole) => job.active !== false));
         return;
       }
 
@@ -312,65 +360,29 @@ function ProjectsContent() {
     requiresScreening: boolean;
   } | null>(null);
 
+  const [eligibilityError, setEligibilityError] = useState(false);
+  const [eligibilityVersion, setEligibilityVersion] = useState(0);
   useEffect(() => {
-    if (assignModal) {
-      // PATCH_86: Use backend endpoint to get eligible workers
-      const loadEligibleWorkers = async () => {
-        setLoadingEligible(true);
-        try {
-          const res = await apiRequest<any>(
-            `/api/admin/workspace/project/${assignModal._id}/eligible-workers`,
-            "GET",
-            null,
-            true,
-          );
-          if (res?.workers) {
-            // Transform to match Worker interface
-            // PATCH_92: Preserve both 'user' and 'userId' for dropdown display compatibility
-            const eligible = res.workers.map((w: any) => ({
-              _id: w._id,
-              user: w.userId,
-              userId: w.userId,
-              jobId: w.position,
-              category: w.position?.category || w.position?.title,
-              status: w.workerStatus,
-            }));
-            setAssignableWorkers(eligible);
-            setEligibilityInfo(res.eligibilityInfo || null);
-          } else {
-            // Fallback to category-based filtering
-            const projectCategory = assignModal.category
-              ?.toLowerCase()
-              .replace(/[_-]/g, " ");
-            const filtered = workers.filter((w: any) => {
-              const workerCategory = (w.category || w.jobId?.category || "")
-                .toLowerCase()
-                .replace(/[_-]/g, " ");
-              return (
-                workerCategory.includes(projectCategory) ||
-                projectCategory.includes(workerCategory) ||
-                projectCategory === "microjobs" ||
-                projectCategory === "other"
-              );
-            });
-            setAssignableWorkers(filtered.length > 0 ? filtered : workers);
-            setEligibilityInfo(null);
-          }
-        } catch (e) {
-          console.error("Failed to load eligible workers:", e);
-          // Fallback to all ready workers
-          setAssignableWorkers(workers);
-          setEligibilityInfo(null);
-        } finally {
-          setLoadingEligible(false);
-        }
-      };
-      loadEligibleWorkers();
-    } else {
-      setAssignableWorkers([]);
-      setEligibilityInfo(null);
-    }
-  }, [assignModal, workers]);
+    let current = true;
+    setSelectedWorker("");
+    setAssignableWorkers([]);
+    setEligibilityInfo(null);
+    setEligibilityError(false);
+    if (!assignModal) return;
+    setLoadingEligible(true);
+    apiRequest<{ workers: Worker[]; eligibilityInfo: typeof eligibilityInfo }>(
+      `/api/admin/workspace/project/${assignModal._id}/eligible-workers`, "GET", null, true,
+    ).then(result => {
+      if (!current) return;
+      if (!Array.isArray(result.workers)) throw new Error("Invalid eligibility response");
+      setAssignableWorkers(result.workers);
+      if (requestedWorker && result.workers.some(worker => worker._id === requestedWorker)) setSelectedWorker(requestedWorker);
+      setEligibilityInfo(result.eligibilityInfo);
+    }).catch(() => {
+      if (current) setEligibilityError(true);
+    }).finally(() => { if (current) setLoadingEligible(false); });
+    return () => { current = false; };
+  }, [assignModal, eligibilityVersion, requestedWorker]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -382,11 +394,13 @@ function ProjectsContent() {
       setSuccess("Project created successfully!");
       setShowModal(false);
       setForm({
+        payType: "per_task", deliverables: [], screeningIds: [], instructions: "",
         title: "",
         description: "",
         category: "microjobs",
         priority: "medium",
-        earnings: 0,
+        estimatedTasks: 1,
+        payRate: 0,
         deadline: "",
         screeningId: "",
         workPositionId: "", // PATCH_86
@@ -403,16 +417,13 @@ function ProjectsContent() {
   };
 
   const handleAssign = async () => {
-    if (!assignModal || !selectedWorker) return;
+    if (!assignModal || !assignableWorkers.some(worker => worker._id === selectedWorker)) return;
     setAssignConfirmOpen(true);
   };
 
   const executeAssign = async () => {
-    if (!assignModal || !selectedWorker) return;
+    if (!assignModal || !assignableWorkers.some(worker => worker._id === selectedWorker)) return;
     setAssigning(true);
-
-    const previousAssignee = assignModal.assignedTo?._id || null;
-    const projectId = assignModal._id;
 
     try {
       await apiRequest(
@@ -422,26 +433,13 @@ function ProjectsContent() {
         true,
       );
       setSuccess(
-        "Project assigned! Worker has been notified. Next: wait for proof submission.",
+        "Project assigned successfully.",
       );
-      setLastAssignedData({ projectId, previousAssignee });
       setAssignModal(null);
       setSelectedWorker("");
       setAssignConfirmOpen(false);
       loadProjects();
 
-      // PATCH_67: Show undo toast for assignment
-      undoToast.showUndo("Project assigned", async () => {
-        // Unassign by setting status back to pending
-        await apiRequest(
-          `/api/admin/workspace/project/${projectId}`,
-          "PUT",
-          { status: "pending", assignedTo: null },
-          true,
-        );
-        setSuccess("Assignment undone");
-        loadProjects();
-      });
     } catch (e: any) {
       setError(e.message || "Failed to assign project");
     } finally {
@@ -497,12 +495,18 @@ function ProjectsContent() {
 
   // PATCH_65.1: Open edit modal with project data
   const handleOpenEdit = (project: Project) => {
+    setEditError("");
+    setEditConflict(false);
     setEditForm({
+      deliverables: (project.deliverables || []).map(d => ({ ...d, title: d.title || "", description: d.description || "", required: d.required !== false })),
       title: project.title || "",
       description: project.description || "",
       category: project.category || "microjobs",
+      priority: project.priority || "medium", projectType: project.projectType || "standard",
+      datasetId: typeof project.datasetId === "string" ? project.datasetId : project.datasetId?._id || "",
+      rewardPerTask: project.rewardPerTask ?? 0, estimatedTasks: project.estimatedTasks ?? 1,
       instructions: (project as any).instructions || "",
-      payRate: project.earnings || 0,
+      payRate: project.payRate || 0,
       payType: (project as any).payType || "per_task",
       deadline: project.deadline ? project.deadline.split("T")[0] : "",
       status: project.status || "open",
@@ -517,8 +521,9 @@ function ProjectsContent() {
 
   // PATCH_65.1: Handle update project
   const handleUpdateProject = async () => {
-    if (!editModal) return;
+    if (!editModal || updating || editConflict) return;
 
+    setEditError("");
     setUpdating(true);
     setError(null);
     try {
@@ -527,6 +532,7 @@ function ProjectsContent() {
         "PUT",
         {
           ...editForm,
+          expectedRevision: editModal.revision || editModal.updatedAt,
           screeningId: editForm.screeningIds[0] || editForm.screeningId || null,
         },
         true,
@@ -535,7 +541,8 @@ function ProjectsContent() {
       setEditModal(null);
       loadProjects();
     } catch (e: any) {
-      setError(e.message || "Failed to update project");
+      setEditConflict(e instanceof ApiError && (e.status === 428 || (e.payload as { code?: string } | null)?.code === "STALE_PROJECT"));
+      setEditError(e.message || "Failed to update project");
     } finally {
       setUpdating(false);
     }
@@ -549,13 +556,14 @@ function ProjectsContent() {
       await apiRequest(
         `/api/admin/workspace/project/${project._id}`,
         "DELETE",
-        null,
+        { expectedRevision: project.revision || project.updatedAt },
         true,
       );
       setSuccess("Project deleted successfully!");
       loadProjects();
     } catch (e: any) {
       setError(e.message || "Failed to delete project");
+      if (e instanceof ApiError && [409, 428].includes(e.status)) void loadProjects();
     }
   };
 
@@ -580,6 +588,10 @@ function ProjectsContent() {
     return styles[priority] || "text-slate-400";
   };
 
+  const unassignedCount = projects.filter(p => p.status === "open" && !p.assignedTo && !p.marketplaceReserved).length;
+  const inProgressCount = projects.filter(p => ["in_progress", "in-progress", "assigned"].includes(p.status)).length;
+  const requestedEligible = assignableWorkers.some(worker => worker._id === requestedWorker);
+
   return (
     <div className="u-container max-w-6xl">
       {/* PATCH_79: Header with Clear Purpose */}
@@ -590,13 +602,13 @@ function ProjectsContent() {
         >
           ← Master Workspace
         </Link>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-3xl">📋</span>
             <div>
               <h1 className="text-2xl font-bold">Projects</h1>
               <p className="text-slate-400 text-sm">
-                Manage actual paid work assigned to workers
+                Create project briefs, set worker compensation and manage staff assignments.
                 {categoryParam && (
                   <span className="ml-2 text-purple-400">
                     (Category: {getJobRoleCategoryLabel(categoryParam)})
@@ -701,55 +713,12 @@ function ProjectsContent() {
           <div className="flex items-start gap-3">
             <span className="text-2xl">📦</span>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-white mb-1">
+              <h3 className="break-words text-sm font-semibold text-white mb-1">
                 Project Workflow:
               </h3>
               <ul className="text-sm text-slate-300 space-y-1">
-                {projects.filter((p) => p.status === "pending" && !p.assignedTo)
-                  .length > 0 && (
-                  <li>
-                    •{" "}
-                    <span className="text-amber-400 font-medium">
-                      {
-                        projects.filter(
-                          (p) => p.status === "pending" && !p.assignedTo,
-                        ).length
-                      }{" "}
-                      unassigned project
-                      {projects.filter(
-                        (p) => p.status === "pending" && !p.assignedTo,
-                      ).length > 1
-                        ? "s"
-                        : ""}
-                    </span>{" "}
-                    → Click "Assign" to give to a ready worker
-                  </li>
-                )}
-                {projects.filter(
-                  (p) => p.status === "in-progress" || p.status === "assigned",
-                ).length > 0 && (
-                  <li>
-                    •{" "}
-                    <span className="text-purple-400 font-medium">
-                      {
-                        projects.filter(
-                          (p) =>
-                            p.status === "in-progress" ||
-                            p.status === "assigned",
-                        ).length
-                      }{" "}
-                      project
-                      {projects.filter(
-                        (p) =>
-                          p.status === "in-progress" || p.status === "assigned",
-                      ).length > 1
-                        ? "s"
-                        : ""}{" "}
-                      in progress
-                    </span>{" "}
-                    → Workers are completing the work
-                  </li>
-                )}
+                {unassignedCount > 0 && <li>{unassignedCount} open {unassignedCount === 1 ? "project" : "projects"} available for assignment</li>}
+                {inProgressCount > 0 && <li>{inProgressCount} {inProgressCount === 1 ? "project" : "projects"} in progress</li>}
                 {projects.filter(
                   (p) => p.status === "completed" && !p.earningsCredited,
                 ).length > 0 && (
@@ -800,19 +769,25 @@ function ProjectsContent() {
         </div>
       )}
 
+      {requestedWorker && <p className="mb-4 rounded-lg border border-cyan-500/30 p-3 text-sm">
+        Choose an open project and select Assign to check this worker’s eligibility.{" "}
+        <Link className="underline" href={`/admin/workforce/${encodeURIComponent(requestedWorker)}`}>View worker</Link>
+      </p>}
+
       {/* Filters */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {["all", "pending", "assigned", "in-progress", "completed"].map((f) => (
+        {["all", "draft", "open", "assigned", "in_progress", "completed", "cancelled"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
+            aria-pressed={filter === f}
             className={`px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
               filter === f
                 ? "bg-blue-600 text-white"
                 : "bg-white/5 text-slate-400 hover:bg-white/10"
             }`}
           >
-            {f.charAt(0).toUpperCase() + f.slice(1).replace("-", " ")}
+            {f.charAt(0).toUpperCase() + f.slice(1).replace("_", " ")}
           </button>
         ))}
       </div>
@@ -832,12 +807,13 @@ function ProjectsContent() {
               key={project._id}
               className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col items-start justify-between gap-4 xl:flex-row">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
                     <h3 className="font-semibold text-white">
                       {project.title}
                     </h3>
+                    {project.marketplaceReserved && <Link href="/admin/opportunities" className="text-sm text-cyan-300 underline">Reserved for a project offer</Link>}
                     <StatusTooltip status={project.status}>
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs ${getStatusBadge(
@@ -848,9 +824,9 @@ function ProjectsContent() {
                       </span>
                     </StatusTooltip>
                     <span
-                      className={`text-xs ${getPriorityBadge(project.priority)}`}
+                      className={`text-xs ${getPriorityBadge(project.priority || "medium")}`}
                     >
-                      ● {project.priority}
+                      ● {project.priority || "medium"}
                     </span>
                     {/* PATCH_97: Project type badge — clear labeling */}
                     {(project as any).projectType === "rlhf_dataset" ? (
@@ -874,16 +850,15 @@ function ProjectsContent() {
                   )}
                   {project.assignedTo && (
                     <p className="text-xs text-slate-500 mt-2">
-                      Assigned to: {project.assignedTo.firstName}{" "}
-                      {project.assignedTo.lastName}
+                      Assigned to: {project.assignedTo.name || [project.assignedTo.firstName, project.assignedTo.lastName].filter(Boolean).join(" ") || "Archived worker"}
                     </p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-4 shrink-0">
+                <div className="flex max-w-full flex-wrap items-center gap-4">
                   <div className="text-right">
                     <p className="text-sm font-medium text-emerald-400">
-                      ${project.earnings?.toFixed(2) || "0.00"}
+                      ${project.payRate?.toFixed(2) || "0.00"}
                     </p>
                     <p className="text-xs text-slate-500">Payout</p>
                   </div>
@@ -906,7 +881,7 @@ function ProjectsContent() {
                         ✏️ Edit
                       </button>
                     )}
-                    {["draft", "open", "pending"].includes(project.status) && (
+                    {!project.marketplaceReserved && ["draft", "open", "pending"].includes(project.status) && (
                       <button
                         onClick={() => handleDeleteProject(project)}
                         className="px-3 py-1.5 text-xs bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition"
@@ -917,8 +892,7 @@ function ProjectsContent() {
                     )}
                   </div>
 
-                  {(project.status === "pending" ||
-                    project.status === "open") && (
+                  {project.status === "open" && !project.assignedTo && !project.marketplaceReserved && (
                     <button
                       onClick={() => setAssignModal(project)}
                       className="btn-secondary text-sm"
@@ -930,11 +904,11 @@ function ProjectsContent() {
                   {/* PATCH_73: Only show credit if proof was approved */}
                   {project.status === "completed" &&
                     !project.earningsCredited &&
-                    (project as any).proofApproved && (
+                    project.assignedTo && (
                       <button
                         onClick={() => {
                           setCreditModal(project);
-                          setCreditAmount(project.earnings || 0);
+                          setCreditAmount(project.payRate || 0);
                         }}
                         className="btn-primary text-sm"
                       >
@@ -1013,14 +987,14 @@ function ProjectsContent() {
       {/* Create Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-4">Create Project</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="create-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="create-project-title" className="text-xl font-bold mb-4">Create Project</h2>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-title" className="block text-sm text-slate-400 mb-1">
                   Title
                 </label>
-                <input
+                <input id="project-create-title"
                   type="text"
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -1029,10 +1003,10 @@ function ProjectsContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-description" className="block text-sm text-slate-400 mb-1">
                   Description
                 </label>
-                <textarea
+                <textarea id="project-create-description"
                   value={form.description}
                   onChange={(e) =>
                     setForm({ ...form, description: e.target.value })
@@ -1043,32 +1017,27 @@ function ProjectsContent() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-category" className="block text-sm text-slate-400 mb-1">
                     Category
                   </label>
-                  <select
+                  <select id="project-create-category"
+                    disabled={Boolean(form.workPositionId)}
                     value={form.category}
                     onChange={(e) =>
                       setForm({ ...form, category: e.target.value })
                     }
                     className="input w-full"
                   >
-                    <option value="microjobs">Microjobs</option>
-                    <option value="data-entry">Data Entry</option>
-                    <option value="content">Content</option>
-                    <option value="research">Research</option>
-                    <option value="writing">Writing</option>
-                    <option value="teaching">Teaching</option>
-                    <option value="coding_math">Coding & Math</option>
-                    <option value="outlier">Outlier</option>
-                    <option value="other">Other</option>
+                    {Array.from(new Set([form.category, ...jobRoles.map(role => role.category), "microjobs", "writing", "teaching", "coding_math", "data_entry", "research", "other"])).filter(Boolean).map(category => (
+                      <option key={category} value={category}>{getJobRoleCategoryLabel(category)}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-priority" className="block text-sm text-slate-400 mb-1">
                     Priority
                   </label>
-                  <select
+                  <select id="project-create-priority"
                     value={form.priority}
                     onChange={(e) =>
                       setForm({ ...form, priority: e.target.value })
@@ -1085,10 +1054,10 @@ function ProjectsContent() {
 
               {/* PATCH_86: Job Role Selection - PRIMARY LINK */}
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-role" className="block text-sm text-slate-400 mb-1">
                   Job Role <span className="text-amber-400">*</span>
                 </label>
-                <select
+                <select id="project-create-role"
                   value={form.workPositionId}
                   onChange={(e) => {
                     const selectedRole = jobRoles.find(
@@ -1100,7 +1069,7 @@ function ProjectsContent() {
                       // Auto-set category from job role
                       category: selectedRole?.category || form.category,
                       // Auto-link screening if job role has one
-                      screeningId: selectedRole?.screeningId || "",
+                      screeningId: "", screeningIds: [],
                     });
                   }}
                   className="input w-full"
@@ -1139,35 +1108,22 @@ function ProjectsContent() {
                 <label className="block text-sm text-slate-400 mb-1">
                   Required Screening Test
                 </label>
-                <select
-                  value={(form as any).screeningId || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, screeningId: e.target.value } as any)
-                  }
-                  className="input w-full"
-                >
-                  <option value="">No screening required</option>
-                  {screenings
-                    .filter((s) => s.category === form.category || !s.category)
-                    .map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.title} ({s.category})
-                      </option>
-                    ))}
-                </select>
+                {screenings.filter(s => s.active !== false).map(s => <label className="block" key={s._id}>
+                  <input type="checkbox" checked={form.screeningIds.includes(s._id)} onChange={e => setForm({ ...form, screeningIds: e.target.checked ? [...form.screeningIds, s._id] : form.screeningIds.filter(id => id !== s._id) })} /> {s.title} ({s.category})
+                </label>)}
                 <p className="text-xs text-slate-500 mt-1">
-                  Only workers who passed this screening can be assigned
+                  Add project screenings here. The selected role’s requirements also apply.
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-create-instructions" className="block text-sm text-slate-400 mb-1">
                   Instructions
                 </label>
-                <textarea
-                  value={(form as any).instructions || ""}
+                <textarea id="project-create-instructions"
+                  value={form.instructions}
                   onChange={(e) =>
-                    setForm({ ...form, instructions: e.target.value } as any)
+                    setForm({ ...form, instructions: e.target.value })
                   }
                   className="input w-full h-20 resize-none"
                   placeholder="Detailed instructions for the worker..."
@@ -1176,25 +1132,25 @@ function ProjectsContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-payout" className="block text-sm text-slate-400 mb-1">
                     Payout ($)
                   </label>
-                  <input
+                  <input id="project-create-payout"
                     type="number"
                     step="0.01"
                     min="0"
-                    value={form.earnings}
+                    value={form.payRate}
                     onChange={(e) =>
-                      setForm({ ...form, earnings: parseFloat(e.target.value) })
+                      setForm({ ...form, payRate: Number(e.target.value) })
                     }
                     className="input w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-create-deadline" className="block text-sm text-slate-400 mb-1">
                     Deadline
                   </label>
-                  <input
+                  <input id="project-create-deadline"
                     type="date"
                     value={form.deadline}
                     onChange={(e) =>
@@ -1205,73 +1161,13 @@ function ProjectsContent() {
                 </div>
               </div>
 
-              {/* PATCH_95: Project Type & Dataset Linking */}
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">
-                  Project Type
-                </label>
-                <select
-                  value={form.projectType}
-                  onChange={(e) =>
-                    setForm({ ...form, projectType: e.target.value })
-                  }
-                  className="input w-full"
-                >
-                  <option value="standard">Microjob (Proof-based)</option>
-                  <option value="rlhf_dataset">AI Dataset (Task-based)</option>
+              <label className="block">Pay type
+                <select className="input w-full" value={form.payType} onChange={e => setForm({ ...form, payType: e.target.value })}>
+                  <option value="per_task">Per task</option><option value="hourly">Hourly</option><option value="fixed">Fixed</option>
                 </select>
-              </div>
-              {form.projectType === "rlhf_dataset" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">
-                      Linked Dataset <span className="text-amber-400">*</span>
-                    </label>
-                    <select
-                      value={form.datasetId}
-                      onChange={(e) =>
-                        setForm({ ...form, datasetId: e.target.value })
-                      }
-                      className="input w-full"
-                      required
-                    >
-                      <option value="">-- Select Dataset --</option>
-                      {datasetOptions.map((ds) => (
-                        <option key={ds._id} value={ds._id}>
-                          {ds.name} ({ds.datasetType})
-                        </option>
-                      ))}
-                    </select>
-                    {datasetOptions.length === 0 && (
-                      <p className="text-xs text-amber-300 mt-1">
-                        No active datasets. Create one in RLHF Datasets page
-                        first.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">
-                      Reward Per Task ($)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.rewardPerTask}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          rewardPerTask: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="input w-full"
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      Credited to worker per approved task
-                    </p>
-                  </div>
-                </div>
-              )}
+              </label>
+              <ProjectDeliveryFields fields={form} datasets={datasetOptions} onChange={change => setForm({ ...form, ...change })} />
+
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
@@ -1296,8 +1192,8 @@ function ProjectsContent() {
       {/* Assign Modal - PATCH_86: Eligibility-aware worker selection */}
       {assignModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-2">Assign Project</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="assign-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="assign-project-title" className="text-xl font-bold mb-2">Assign Project</h2>
             <p className="text-sm text-slate-400 mb-2">
               Assign &quot;{assignModal.title}&quot; to a worker
             </p>
@@ -1328,7 +1224,9 @@ function ProjectsContent() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-1">
+              {requestedWorker && !loadingEligible && !eligibilityError && !requestedEligible &&
+                <p role="status" className="mb-2 text-amber-300">This worker is ineligible for this project. Select another project or choose an eligible worker below.</p>}
+              <label htmlFor="assign-worker" className="block text-sm text-slate-400 mb-1">
                 Select Eligible Worker (
                 {loadingEligible ? "..." : assignableWorkers.length} available)
               </label>
@@ -1337,6 +1235,8 @@ function ProjectsContent() {
                   <span className="animate-spin">⏳</span> Loading eligible
                   workers...
                 </div>
+              ) : eligibilityError ? (
+                <p role="alert">Eligibility could not be verified. <button type="button" className="underline" onClick={() => setEligibilityVersion(v => v + 1)}>Try again</button></p>
               ) : assignableWorkers.length === 0 ? (
                 <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm">
                   ⚠️ No eligible workers found.
@@ -1355,7 +1255,7 @@ function ProjectsContent() {
                   )}
                 </div>
               ) : (
-                <select
+                <select id="assign-worker"
                   value={selectedWorker}
                   onChange={(e) => setSelectedWorker(e.target.value)}
                   className="input w-full"
@@ -1369,7 +1269,7 @@ function ProjectsContent() {
                         w.userId?.email ||
                         "Worker"}{" "}
                       -{" "}
-                      {w.category ||
+                      {w.position?.title || w.category ||
                         w.jobId?.title ||
                         w.jobId?.category ||
                         "Worker"}
@@ -1387,8 +1287,7 @@ function ProjectsContent() {
                 </div>
                 <ul className="text-sm text-blue-200 space-y-1">
                   <li>✓ Project status will change to "Assigned"</li>
-                  <li>✓ Worker will be notified of new assignment</li>
-                  <li>✓ Worker status will update to "Working"</li>
+                  <li>✓ The project will appear in the worker’s workspace.</li>
                 </ul>
               </div>
             )}
@@ -1426,7 +1325,7 @@ function ProjectsContent() {
         onClose={() => setAssignConfirmOpen(false)}
         onConfirm={executeAssign}
         title="Confirm Worker Assignment"
-        description={`You are about to assign "${assignModal?.title || "this project"}" to the selected worker. The worker will be notified immediately.`}
+        description={`You are about to assign "${assignModal?.title || "this project"}" to the selected worker.`}
         variant="info"
         loading={assigning}
         confirmLabel="Confirm Assignment"
@@ -1439,12 +1338,12 @@ function ProjectsContent() {
             <div className="flex justify-between">
               <span className="text-slate-400">Earnings:</span>
               <span className="text-emerald-400">
-                ${assignModal?.earnings || 0}
+                ${assignModal?.payRate || 0}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">New Status:</span>
-              <span className="text-blue-400">Assigned → Working</span>
+              <span className="text-blue-400">Assigned</span>
             </div>
           </div>
         }
@@ -1453,17 +1352,17 @@ function ProjectsContent() {
       {/* PATCH_48: Credit Earnings Modal */}
       {creditModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-md border border-white/10">
-            <h2 className="text-xl font-bold mb-2">💰 Credit Earnings</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="credit-project-title" className="bg-slate-900 rounded-2xl p-6 w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain border border-white/10">
+            <h2 id="credit-project-title" className="text-xl font-bold mb-2">Credit Earnings</h2>
             <p className="text-sm text-slate-400 mb-4">
               Credit earnings for &quot;{creditModal.title}&quot;
             </p>
 
             <div className="mb-4">
-              <label className="block text-sm text-slate-400 mb-1">
+              <label htmlFor="project-edit-amount" className="block text-sm text-slate-400 mb-1">
                 Amount ($)
               </label>
-              <input
+              <input id="project-edit-amount"
                 type="number"
                 step="0.01"
                 min="0"
@@ -1474,7 +1373,7 @@ function ProjectsContent() {
                 className="input w-full"
               />
               <p className="text-xs text-slate-500 mt-1">
-                Default payout: ${creditModal.earnings?.toFixed(2) || "0.00"}
+                Default payout: ${creditModal.payRate?.toFixed(2) || "0.00"}
               </p>
             </div>
 
@@ -1539,7 +1438,7 @@ function ProjectsContent() {
                   setViewModal(null);
                   setViewData(null);
                 }}
-                className="text-slate-400 hover:text-white text-2xl"
+                aria-label="Close project details" className="text-slate-400 hover:text-white text-2xl"
               >
                 ×
               </button>
@@ -1573,7 +1472,7 @@ function ProjectsContent() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-700/50 rounded-lg">
-                    <p className="text-xs text-slate-400">Pay Rate</p>
+                    <p className="text-xs text-slate-400">Worker pay rate</p>
                     <p className="text-lg font-semibold text-emerald-400">
                       ${viewData.project?.payRate?.toFixed(2) || "0.00"}
                     </p>
@@ -1615,20 +1514,19 @@ function ProjectsContent() {
                   </div>
                 )}
 
-                {viewData.workerProfile && (
+                {viewData.project?.assignedTo && (
                   <div className="p-3 bg-cyan-900/20 border border-cyan-500/20 rounded-lg">
                     <p className="text-xs text-slate-400 mb-1">
                       Assigned Worker
                     </p>
                     <p className="text-sm text-white">
-                      {viewData.workerProfile.user?.firstName || "Unknown"}{" "}
-                      {viewData.workerProfile.user?.lastName || "Worker"}
+                      {viewData.workerProfile?.user?.name || viewData.project.assignedTo.name || "Assigned worker"}
                     </p>
                     <p className="text-xs text-slate-400">
-                      {viewData.workerProfile.user?.email || "No email"}
+                      {viewData.workerProfile?.user?.email || viewData.project.assignedTo.email || "No email"}
                     </p>
                     <p className="text-xs text-cyan-400 mt-1">
-                      Status: {viewData.workerProfile.workerStatus || "N/A"}
+                      Status: {viewData.workerProfile?.workerStatus || viewData.project.assignedTo.workerStatus || "N/A"}
                     </p>
                   </div>
                 )}
@@ -1660,9 +1558,9 @@ function ProjectsContent() {
                               {new Date(proof.createdAt).toLocaleDateString()}
                             </span>
                           </div>
-                          {proof.notes && (
+                          {proof.submissionText && (
                             <p className="text-xs text-slate-300 mt-1">
-                              {proof.notes}
+                              {proof.submissionText}
                             </p>
                           )}
                         </div>
@@ -1713,13 +1611,28 @@ function ProjectsContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-white">Edit Project</h2>
               <button
-                onClick={() => setEditModal(null)}
+                disabled={updating}
+                  onClick={() => setEditModal(null)}
+                aria-label="Close project editor"
                 className="text-slate-400 hover:text-white text-2xl"
               >
                 ×
               </button>
             </div>
 
+            {editError && <p role="alert" className="mb-4 text-amber-200">{editError}
+              {editConflict && <> Your draft is still here. <Link className="underline" target="_blank" rel="noopener"
+                href={`/admin/workspace/projects?action=view&id=${editModal._id}`}>View the latest project in a new tab</Link>
+                {" · "}<button type="button" disabled={updating} className="underline" onClick={async () => {
+                  setUpdating(true);
+                  try {
+                    const result = await apiRequest<{ project: Project }>(`/api/admin/workspace/project/${editModal._id}`, "GET", null, true);
+                    handleOpenEdit(result.project);
+                    void loadProjects();
+                  } catch (cause) { setEditError(cause instanceof Error ? cause.message : "Could not reload this project."); }
+                  finally { setUpdating(false); }
+                }}>Discard my draft and reload</button></>}
+            </p>}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1728,10 +1641,10 @@ function ProjectsContent() {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-title" className="block text-sm text-slate-400 mb-1">
                   Title *
                 </label>
-                <input
+                <input id="project-edit-title"
                   type="text"
                   value={editForm.title}
                   onChange={(e) =>
@@ -1743,10 +1656,10 @@ function ProjectsContent() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-description" className="block text-sm text-slate-400 mb-1">
                   Description
                 </label>
-                <textarea
+                <textarea id="project-edit-description"
                   value={editForm.description}
                   onChange={(e) =>
                     setEditForm({ ...editForm, description: e.target.value })
@@ -1758,51 +1671,48 @@ function ProjectsContent() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-category" className="block text-sm text-slate-400 mb-1">
                     Category
                   </label>
-                  <select
+                  <select id="project-edit-category"
+                    disabled={Boolean(editModal.workPositionId)}
                     value={editForm.category}
                     onChange={(e) =>
                       setEditForm({ ...editForm, category: e.target.value })
                     }
                     className="input w-full"
                   >
-                    <option value="microjobs">Microjobs</option>
-                    <option value="writing">Writing</option>
-                    <option value="teaching">Teaching</option>
-                    <option value="coding_math">Coding & Math</option>
-                    <option value="outlier">Outlier</option>
-                    <option value="other">Other</option>
+                    {Array.from(new Set([editForm.category, ...jobRoles.map(role => role.category), "microjobs", "writing", "teaching", "coding_math", "data_entry", "research", "other"])).filter(Boolean).map(category => (
+                      <option key={category} value={category}>{getJobRoleCategoryLabel(category)}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-status" className="block text-sm text-slate-400 mb-1">
                     Status
                   </label>
                   {/* PATCH_73: Removed 'completed' - completion must occur via proof approval */}
-                  <select
+                  <select id="project-edit-status"
+                    disabled={editModal.marketplaceReserved}
                     value={editForm.status}
                     onChange={(e) =>
                       setEditForm({ ...editForm, status: e.target.value })
                     }
                     className="input w-full"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="open">Open</option>
-                    <option value="assigned">Assigned</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="cancelled">Cancelled</option>
+                    {(["draft", "open"].includes(editModal.status) ? ["draft", "open", "cancelled"] :
+                      ["assigned", "in_progress"].includes(editModal.status) ? [editModal.status, "cancelled"] : [editModal.status])
+                      .map(status => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
-                    Pay Rate ($)
+                  <label htmlFor="project-edit-worker-pay-rate-usd" className="block text-sm text-slate-400 mb-1">
+                    Worker pay rate (USD)
                   </label>
-                  <input
+                  <input id="project-edit-worker-pay-rate-usd"
                     type="number"
                     step="0.01"
                     min="0"
@@ -1817,10 +1727,10 @@ function ProjectsContent() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-400 mb-1">
+                  <label htmlFor="project-edit-pay-type" className="block text-sm text-slate-400 mb-1">
                     Pay Type
                   </label>
-                  <select
+                  <select id="project-edit-pay-type"
                     value={editForm.payType}
                     onChange={(e) =>
                       setEditForm({ ...editForm, payType: e.target.value })
@@ -1846,7 +1756,7 @@ function ProjectsContent() {
                   ) : (
                     screenings
                       .filter(
-                        (s) => s.category === editForm.category || !s.category,
+                        (s) => s.active !== false || editForm.screeningIds.includes(s._id),
                       )
                       .map((s) => (
                         <label
@@ -1891,10 +1801,10 @@ function ProjectsContent() {
               </div>
 
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-instructions" className="block text-sm text-slate-400 mb-1">
                   Instructions
                 </label>
-                <textarea
+                <textarea id="project-edit-instructions"
                   value={editForm.instructions}
                   onChange={(e) =>
                     setEditForm({ ...editForm, instructions: e.target.value })
@@ -1905,11 +1815,18 @@ function ProjectsContent() {
                 />
               </div>
 
+              <label className="block text-sm text-slate-400">Priority
+                <select className="input w-full" value={editForm.priority} onChange={e => setEditForm({ ...editForm, priority: e.target.value })}>
+                  {["low", "medium", "high", "urgent"].map(priority => <option key={priority}>{priority}</option>)}
+                </select>
+              </label>
+              <ProjectDeliveryFields fields={editForm} datasets={datasetOptions} onChange={change => setEditForm({ ...editForm, ...change })} />
+
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label htmlFor="project-edit-deadline" className="block text-sm text-slate-400 mb-1">
                   Deadline
                 </label>
-                <input
+                <input id="project-edit-deadline"
                   type="date"
                   value={editForm.deadline}
                   onChange={(e) =>
@@ -1922,6 +1839,7 @@ function ProjectsContent() {
               <div className="flex gap-3 pt-4 border-t border-slate-700">
                 <button
                   type="button"
+                  disabled={updating}
                   onClick={() => setEditModal(null)}
                   className="btn-secondary flex-1"
                 >
@@ -1929,7 +1847,7 @@ function ProjectsContent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={updating || !editForm.title}
+                  disabled={updating || editConflict || !editForm.title}
                   className="btn-primary flex-1 disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Changes"}
@@ -1940,13 +1858,7 @@ function ProjectsContent() {
         </div>
       )}
 
-      {/* PATCH_67: UndoToast for assignment actions */}
-      <UndoToast
-        show={undoToast.show}
-        message={undoToast.message}
-        onUndo={undoToast.handleUndo}
-        onExpire={undoToast.handleExpire}
-      />
+
     </div>
   );
 }

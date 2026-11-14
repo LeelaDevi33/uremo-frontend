@@ -428,14 +428,9 @@ export default function AdminServiceRequestsPage() {
 
                     <a
                       className="btn-secondary"
-                      href="/admin/services"
-                      onClick={async () => {
-                        await copyToClipboard(
-                          buildRequestClipboardText(selected)
-                        );
-                      }}
+                      href="/admin/opportunities"
                     >
-                      Create Service from this
+                      Manage project offers
                     </a>
                   </div>
                 </Card>
