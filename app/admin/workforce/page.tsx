@@ -1,5 +1,7 @@
 "use client";
 
+import { workerIdentity } from "./[workerId]/workerIdentity";
+
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -156,7 +158,7 @@ export default function WorkforceControlCenterPage() {
           .filter((a: any) => a.status === "pending")
           .map((a: any) => ({
             _id: a._id,
-            userId: a.user || a.userId,
+            userId: workerIdentity(a.user, a.userId),
             positionTitle: a.positionTitle || a.position?.title,
             createdAt: a.createdAt,
           })),
@@ -806,6 +808,7 @@ export default function WorkforceControlCenterPage() {
                 />
               </div>
               <select
+                aria-label="Filter workers by status"
                 value={workerFilter}
                 onChange={(e) => setWorkerFilter(e.target.value)}
                 className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"

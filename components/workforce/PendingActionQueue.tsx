@@ -141,7 +141,7 @@ export default function PendingActionQueue({
                     href={`/admin/workforce/${app._id}`}
                     className="font-medium text-white truncate hover:text-cyan-400 transition-colors block"
                   >
-                    {app.userId?.firstName} {app.userId?.lastName}
+                    {[app.userId?.firstName, app.userId?.lastName].filter(Boolean).join(" ") || app.userId?.email || "View applicant"}
                   </Link>
                   <p className="text-xs text-slate-400 truncate">
                     Applied for: {app.positionTitle || "Position"}
@@ -209,7 +209,7 @@ export default function PendingActionQueue({
                     href={`/admin/workforce/${s._id}`}
                     className="font-medium text-white truncate hover:text-cyan-400 transition-colors block"
                   >
-                    {s.workerId?.firstName} {s.workerId?.lastName}
+                    {[s.workerId?.firstName, s.workerId?.lastName].filter(Boolean).join(" ") || "View worker"}
                   </Link>
                   <p className="text-xs text-slate-400 truncate">
                     {s.positionTitle || "Position"} • Attempt{" "}
