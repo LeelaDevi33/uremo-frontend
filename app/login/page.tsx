@@ -90,16 +90,6 @@ function LoginForm() {
       return;
     }
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[LOGIN_PAYLOAD]", {
-        endpoint: "/api/auth/login",
-        email: String(email).trim().toLowerCase(),
-        hasPassword: Boolean(password),
-        passwordLength: String(password).length,
-        apiBase: process.env.NEXT_PUBLIC_API_URL || "(missing)",
-      });
-    }
-
     setLoading(true);
     try {
       const res = await apiRequest("/api/auth/login", "POST", {

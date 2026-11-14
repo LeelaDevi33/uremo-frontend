@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { briefFields, briefPayload } from "../app/admin/work-positions/roleBrief";
+import { briefFields, briefPayload, roleReviewNotes } from "../app/admin/work-positions/roleBrief";
+
+test("admin review notes identify duplicate public titles, empty fields and unlinked screenings", () => {
+  const base = { title: "Research review", requirements: "Read a brief", description: "Review findings" };
+  const notes = roleReviewNotes([
+    { ...base, _id: "1" }, { ...base, _id: "2", title: "  RESEARCH   review ", requirements: " ", hasScreening: true },
+    { ...base, _id: "3", active: false }, { ...base, _id: "4", isSpecialization: false },
+    { ...base, _id: "5", title: "Design", hasScreening: true, screeningIds: ["a"] },
+  ]);
+  assert.deepEqual([...notes.keys()], ["1", "2"]);
+  assert.deepEqual(notes.get("1"), ["Another open role uses this title"]);
+  assert.deepEqual(notes.get("2"), ["Another open role uses this title", "Requirements are empty", "Screening enabled without a linked assessment"]);
+});
 
 test("a legacy role retains its multiline requirements without inventing optional facts", () => {
   const original = { description: "Translation QA", requirements: "Read Bengali\nReview written English" };

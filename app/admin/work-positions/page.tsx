@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { projectCategories } from "../opportunities/editor";
-import { briefFields, briefPayload, experienceLabels, workModeLabels, type RoleBrief } from "./roleBrief";
+import { briefFields, briefPayload, experienceLabels, roleReviewNotes, workModeLabels, type RoleBrief } from "./roleBrief";
 
 type Role = RoleBrief & {
   _id: string; title: string; category: string;
-  adminNotes?: string; active?: boolean; sortOrder?: number; revision?: string; updatedAt?: string;
+  adminNotes?: string; active?: boolean; isSpecialization?: boolean; sortOrder?: number; revision?: string; updatedAt?: string;
   hasScreening?: boolean; screeningId?: unknown; screeningIds?: unknown[]; trainingMaterials?: unknown[];
 };
 function fields(role?: Role) {
@@ -29,6 +29,7 @@ export default function AdminWorkPositionsPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [active, setActive] = useState("all");
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [editor, setEditor] = useState<{ role?: Role; draft: ReturnType<typeof fields> } | null>(null);
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -88,7 +89,8 @@ export default function AdminWorkPositionsPage() {
   }
   const categories = [...new Set(rows.map(row => row.category).filter(Boolean))].sort();
   const suggestions = [...new Set([...projectCategories.map(([value]) => value), ...categories])].sort();
-  const visible = rows.filter(row => (!category || row.category === category) &&
+  const notes = roleReviewNotes(rows);
+  const visible = rows.filter(row => (!reviewOnly || notes.has(row._id)) && (!category || row.category === category) &&
     (active === "all" || (row.active !== false) === (active === "active")) &&
     [row.title, row.category, row.description, row.requirements, row.locationEligibility, ...(row.skills ?? [])].some(value => value?.toLowerCase().includes(query.toLowerCase().trim())));
   const draft = editor?.draft;
@@ -147,11 +149,15 @@ export default function AdminWorkPositionsPage() {
         <label>Search roles<input type="search" className={input} value={query} onChange={e => setQuery(e.target.value)} /></label>
         <label>Filter by category<select className={input} value={category} onChange={e => setCategory(e.target.value)}><option value="">All categories</option>{categories.map(v => <option key={v}>{v}</option>)}</select></label>
         <label>Filter by availability<select className={input} value={active} onChange={e => setActive(e.target.value)}><option value="all">All roles</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <label className="flex items-center gap-2 sm:col-span-3"><input type="checkbox" checked={reviewOnly}
+          onChange={event => setReviewOnly(event.target.checked)} />Show open roles with review notes ({notes.size})</label>
       </div>
       {loading ? <p role="status">Loading roles…</p> : !visible.length ? <div className={panel}><p>{error ? "Roles could not be displayed." : rows.length ? "No roles match these filters." : "No specializations have been created."}</p></div> :
         <ul className="grid gap-3 md:grid-cols-2">{visible.map(role => <li className={panel + " min-w-0"} key={role._id}>
-          <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : "Active"}</span></div>
+          <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : role.isSpecialization === false ? "Outside role directory" : "Active"}</span></div>
           <p className="mt-1 text-sm text-slate-400">{role.category} · Display order {role.sortOrder ?? 0}</p>
+          {notes.has(role._id) && <ul aria-label="Role review notes" className="mt-2 list-inside list-disc text-sm text-amber-200">
+            {notes.get(role._id)?.map(note => <li key={note}>{note}</li>)}</ul>}
           {role.description && <p className="mt-3 whitespace-pre-wrap break-words text-sm">{role.description}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-2"><Link className="btn-primary" href={`/admin/work-positions/${role._id}`}>Manage specialization</Link>
             <button className="btn-secondary" type="button" disabled={busy} onClick={() => edit(role)}>Edit details</button>
