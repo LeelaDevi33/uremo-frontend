@@ -332,7 +332,7 @@ export default function MasterWorkspacePage() {
     <div className="u-container max-w-7xl">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-3xl">WS</span>
             <div>
@@ -381,7 +381,7 @@ export default function MasterWorkspacePage() {
       {/* Context Controller */}
       <div className="card mb-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <span className="text-slate-400 text-sm font-medium">
               Context Mode:
             </span>
@@ -390,7 +390,7 @@ export default function MasterWorkspacePage() {
                 onClick={() => setMode("screening")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                   mode === "screening"
-                    ? "bg-cyan-500 text-white"
+                    ? "bg-cyan-700 text-white"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -400,7 +400,7 @@ export default function MasterWorkspacePage() {
                 onClick={() => setMode("project")}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                   mode === "project"
-                    ? "bg-purple-500 text-white"
+                    ? "bg-purple-700 text-white"
                     : "text-slate-400 hover:text-white"
                 }`}
               >
@@ -410,7 +410,7 @@ export default function MasterWorkspacePage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="flex items-center gap-6 text-sm">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
             <div className="flex items-center gap-2">
               <span className="text-cyan-400 font-bold">
                 {stats.activeScreenings}
@@ -591,7 +591,7 @@ export default function MasterWorkspacePage() {
                             className={`text-sm px-3 py-1.5 rounded-lg transition-all ${
                               promotion.valid
                                 ? "bg-purple-500 hover:bg-purple-600 text-white"
-                                : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                                : "bg-slate-700 text-slate-400 cursor-not-allowed"
                             }`}
                           >
                             {promotion.valid
@@ -632,7 +632,7 @@ export default function MasterWorkspacePage() {
                               Screenings
                             </h4>
                             {data.screenings.length === 0 ? (
-                              <p className="text-sm text-slate-500">
+                              <p className="text-sm text-slate-400">
                                 No screenings in this category
                               </p>
                             ) : (
@@ -665,7 +665,7 @@ export default function MasterWorkspacePage() {
                                       </Link>
                                       <div className="flex items-center gap-2">
                                         {/* PATCH_62: Show question count */}
-                                        <span className="text-xs text-slate-500">
+                                        <span className="text-xs text-slate-400">
                                           {s.questions?.length || 0} Q
                                         </span>
                                         <span
@@ -697,7 +697,7 @@ export default function MasterWorkspacePage() {
                               Projects
                             </h4>
                             {data.projects.length === 0 ? (
-                              <p className="text-sm text-slate-500">
+                              <p className="text-sm text-slate-400">
                                 No projects in this category
                               </p>
                             ) : (
@@ -830,7 +830,7 @@ export default function MasterWorkspacePage() {
                 }`}
               >
                 <span className="text-slate-300">{log.action}</span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-slate-400">
                   {log.time.toLocaleTimeString()}
                 </span>
               </div>
@@ -844,7 +844,7 @@ export default function MasterWorkspacePage() {
         <h3 className="text-sm font-medium text-slate-400 mb-2">
           PATCH_62: System Status
         </h3>
-        <ul className="text-xs text-slate-500 space-y-1">
+        <ul className="text-xs text-slate-400 space-y-1">
           <li>
             • Screenings and Projects are linked via{" "}
             <span className="text-cyan-400">category</span> field (implicit

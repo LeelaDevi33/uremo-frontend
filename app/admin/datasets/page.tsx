@@ -319,7 +319,7 @@ function DatasetsContent() {
       ) : datasets.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-400">No datasets yet</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-400 mt-1">
             Create your first RLHF dataset to get started
           </p>
         </div>
@@ -359,7 +359,7 @@ function DatasetsContent() {
                       {ds.description}
                     </p>
                   )}
-                  <div className="flex gap-4 text-xs text-gray-500">
+                  <div className="flex gap-4 text-xs text-gray-400">
                     <span>{ds.taskCount || 0} tasks</span>
                     <span>{ds.submissionCount || 0} submissions</span>
                     <span>{ds.difficultyLevel}</span>

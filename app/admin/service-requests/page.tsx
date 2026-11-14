@@ -225,6 +225,7 @@ export default function AdminServiceRequestsPage() {
 
           <select
             className="u-select"
+            aria-label="Filter requests by status"
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -240,6 +241,7 @@ export default function AdminServiceRequestsPage() {
 
           <select
             className="u-select"
+            aria-label="Filter requests by source"
             value={source}
             onChange={(e) => setSource(e.target.value)}
           >
@@ -316,6 +318,7 @@ export default function AdminServiceRequestsPage() {
           selected ? "" : "pointer-events-none"
         }`}
         aria-hidden={!selected}
+        inert={!selected}
       >
         <div
           className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity ${

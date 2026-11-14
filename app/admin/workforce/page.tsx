@@ -600,22 +600,22 @@ export default function WorkforceControlCenterPage() {
         
         {/* PATCH_79: Worker Flow Mental Model */}
         <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-slate-800/50 via-slate-800/80 to-slate-800/50 border border-slate-700/50">
-          <p className="text-xs text-slate-500 mb-2">📊 Worker Progression (Step-Based — No Skipping):</p>
+          <p className="text-xs text-slate-400 mb-2">📊 Worker Progression (Step-Based — No Skipping):</p>
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <span className="px-2 py-1 rounded bg-slate-500/20 text-slate-300">Applied</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300">Screening</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-300">Test Submitted</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">Ready to Work</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300">Assigned</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-300">Working</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300">Proof</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">🔒 Completed</span>
           </div>
         </div>
@@ -731,7 +731,7 @@ export default function WorkforceControlCenterPage() {
               className="p-3 rounded-xl bg-white/5 border border-white/5 text-center"
             >
               <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-slate-500">{stat.label}</p>
+              <p className="text-xs text-slate-400">{stat.label}</p>
             </div>
           ))}
         </div>
@@ -949,7 +949,7 @@ export default function WorkforceControlCenterPage() {
 
       {/* Quick Links */}
       <div className="mt-8 pt-6 border-t border-white/10">
-        <p className="text-xs text-slate-500 mb-3">Related Pages:</p>
+        <p className="text-xs text-slate-400 mb-3">Related Pages:</p>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/admin/workspace/projects"

@@ -168,6 +168,7 @@ export default function AdminRentalsPage() {
       {/* Filters */}
       <div className="mb-6 flex gap-4">
         <select
+          aria-label="Filter rentals by status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
