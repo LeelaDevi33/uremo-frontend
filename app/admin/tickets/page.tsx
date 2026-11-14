@@ -179,6 +179,7 @@ export default function AdminTicketsPage() {
       <div className="card mb-6">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <select
+            aria-label="Filter tickets by status"
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
@@ -194,6 +195,7 @@ export default function AdminTicketsPage() {
           </select>
 
           <select
+            aria-label="Filter tickets by category"
             value={categoryFilter}
             onChange={(e) => {
               setCategoryFilter(e.target.value);
@@ -209,6 +211,7 @@ export default function AdminTicketsPage() {
           </select>
 
           <select
+            aria-label="Filter tickets by priority"
             value={priorityFilter}
             onChange={(e) => {
               setPriorityFilter(e.target.value);
@@ -225,6 +228,7 @@ export default function AdminTicketsPage() {
 
           <input
             type="text"
+            aria-label="Search tickets by subject or user"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -274,9 +278,10 @@ export default function AdminTicketsPage() {
                       {ticket.hasUnreadAdmin && (
                         <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
                       )}
-                      <span className="font-medium truncate max-w-[200px]">
+                      <Link href={`/admin/tickets/${ticket._id}`} onClick={event => event.stopPropagation()}
+                        className="max-w-[200px] truncate font-medium underline underline-offset-2">
                         {ticket.subject}
-                      </span>
+                      </Link>
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -293,7 +298,7 @@ export default function AdminTicketsPage() {
                                 ? ticket.user.email.split("@")[0]
                                 : "Anonymous"}
                       </p>
-                      <p className="text-[#6B7280]">
+                      <p className="text-slate-400">
                         {ticket.user?.email || "No email"}
                       </p>
                     </div>
