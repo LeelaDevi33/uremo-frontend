@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -31,6 +31,8 @@ interface Transaction {
   // PATCH_82: Added paid_unverified for PayPal
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
+  canUndo?: boolean;
+  undoTransactionId?: string;
   settlementReference?: string;
   methodName?: string;
   paymentReference?: string;
@@ -60,16 +62,10 @@ interface WithdrawalRequest {
 export default function AdminWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { ready, isAdmin } = useAuth();
+  const { ready, isAdmin, user: admin } = useAuth();
   const undoToast = useUndoToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [lastAdjustment, setLastAdjustment] = useState<{
-    userId: string;
-    amount: number;
-    type: "credit" | "debit";
-  } | null>(null);
-
   // Search
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
@@ -89,6 +85,12 @@ export default function AdminWalletPage() {
   const [adjustAmount, setAdjustAmount] = useState("");
   const [adjustDescription, setAdjustDescription] = useState("");
   const [adjustLoading, setAdjustLoading] = useState(false);
+  const [adjustError, setAdjustError] = useState("");
+  const adjustmentRequests = useRef(new Map<string, string>());
+  const adjustmentBusy = useRef(false);
+  const [undoing, setUndoing] = useState("");
+  const walletRequest = useRef(0);
+  const activeWallet = useRef("");
 
   // PATCH_80: Pending topups
   const [pendingTopups, setPendingTopups] = useState<Transaction[]>([]);
@@ -327,70 +329,86 @@ export default function AdminWalletPage() {
   };
 
   const selectUser = async (user: User) => {
+    const request = ++walletRequest.current;
+    activeWallet.current = user._id;
     setSelectedUser(user);
     setUserLoading(true);
     try {
       const res = await apiRequest(`/api/admin/wallet/user/${user._id}`, "GET");
+      if (request !== walletRequest.current) return;
       setSelectedUser(res.user);
       setUserTransactions(res.transactions || []);
     } catch (err: any) {
       toast(err.message || "Failed to load user wallet", "error");
     } finally {
-      setUserLoading(false);
+      if (request === walletRequest.current) setUserLoading(false);
     }
   };
 
   const handleAdjust = async () => {
-    const amount = parseFloat(adjustAmount);
-    if (!amount || amount <= 0) {
-      toast("Amount must be greater than 0", "error");
+    if (!selectedUser || adjustmentBusy.current) return;
+    const amount = Number(adjustAmount);
+    const description = adjustDescription.trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(adjustAmount) || !Number.isFinite(amount) || amount <= 0 || !description) {
+      setAdjustError("Enter a positive USD amount with up to two decimal places and a reason.");
       return;
     }
 
-    if (!selectedUser) return;
-
-    const userId = selectedUser._id;
-    const currentType = adjustType;
-
+    const fields = { userId: selectedUser._id, amount, type: adjustType, description };
+    const key = "uremo-admin-adjustment:" + JSON.stringify([admin?.email, fields]);
+    function forgetRequest() {
+      adjustmentRequests.current.delete(key);
+      try { sessionStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
+    }
+    adjustmentBusy.current = true;
     setAdjustLoading(true);
+    setAdjustError("");
     try {
-      const res = await apiRequest("/api/admin/wallet/adjust", "POST", {
-        userId: selectedUser._id,
-        amount,
-        type: adjustType,
-        description: adjustDescription,
-      });
-      toast(res.message || "Balance adjusted", "success");
-      setLastAdjustment({ userId, amount, type: currentType });
+      let requestId = adjustmentRequests.current.get(key);
+      if (!requestId) {
+        try { requestId = sessionStorage.getItem(key) || undefined; } catch { /* Use the in-memory request. */ }
+        requestId ||= crypto.randomUUID();
+        adjustmentRequests.current.set(key, requestId);
+        try { sessionStorage.setItem(key, requestId); } catch { /* Same-tab retries still work. */ }
+      }
+      const receipt = await apiRequest<{ transactionId: string }>("/api/admin/wallet/adjust", "POST", { ...fields, requestId }, true);
+      if (!/^[a-f\d]{24}$/i.test(receipt?.transactionId)) throw new Error("No adjustment receipt received.");
+      forgetRequest();
       setShowAdjust(false);
       setAdjustAmount("");
       setAdjustDescription("");
-      selectUser(selectedUser); // Refresh user data
-      fetchStats(); // Refresh stats
+      if (activeWallet.current === selectedUser._id) void selectUser(selectedUser);
+      void fetchStats();
 
-      // PATCH_67: Show undo toast for wallet adjustment
-      undoToast.showUndo(
-        `${currentType === "credit" ? "Credited" : "Debited"} $${amount.toFixed(2)}`,
-        async () => {
-          // Reverse the adjustment
-          const reverseType = currentType === "credit" ? "debit" : "credit";
-          await apiRequest("/api/admin/wallet/adjust", "POST", {
-            userId,
-            amount,
-            type: reverseType,
-            description: `Undo: ${adjustDescription}`,
-          });
-          toast("Adjustment undone", "info");
-          selectUser(selectedUser);
-          fetchStats();
-        },
-      );
-    } catch (err: any) {
-      toast(err.message || "Adjustment failed", "error");
+      undoToast.showUndo(`${adjustType === "credit" ? "Credited" : "Debited"} $${amount.toFixed(2)} · Receipt ${receipt.transactionId}`,
+        () => void undoAdjustment(receipt.transactionId, selectedUser));
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status >= 400 && cause.status < 500) {
+        forgetRequest();
+        setAdjustError(cause.message);
+      } else {
+        setAdjustError("The adjustment was not confirmed. Retry the same amount, account and reason to check its receipt.");
+      }
     } finally {
+      adjustmentBusy.current = false;
       setAdjustLoading(false);
     }
   };
+
+  async function undoAdjustment(transactionId: string, account: User) {
+    if (undoing) return;
+    setUndoing(transactionId);
+    try {
+      await apiRequest(`/api/admin/wallet/adjust/${transactionId}/undo`, "POST", null, true);
+      toast("Adjustment reversed.", "success");
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "Could not confirm the reversal. Check the receipt and retry.", "error");
+    } finally {
+      if (activeWallet.current === account._id) void selectUser(account);
+      void fetchStats();
+      setUndoing("");
+    }
+  }
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
@@ -848,7 +866,7 @@ export default function AdminWalletPage() {
                     ${(selectedUser.walletBalance || 0).toFixed(2)}
                   </p>
                   <button
-                    onClick={() => setShowAdjust(true)}
+                    onClick={() => { setAdjustError(""); setShowAdjust(true); }}
                     className="mt-3 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-sm"
                   >
                     Adjust Balance
@@ -884,6 +902,11 @@ export default function AdminWalletPage() {
                           <p className="text-xs text-slate-500">
                             {new Date(tx.createdAt).toLocaleString()}
                           </p>
+                          {tx.canUndo && <button type="button" disabled={!!undoing} className="mt-1 text-sm text-teal-300 underline"
+                            onClick={() => { if (window.confirm(`Reverse this $${tx.amount.toFixed(2)} ${tx.type} for ${selectedUser.email}?`)) void undoAdjustment(tx._id, selectedUser); }}>
+                            {undoing === tx._id ? "Reversing…" : "Reverse adjustment"}
+                          </button>}
+                          {tx.undoTransactionId && <p className="mt-1 break-all text-xs text-slate-300">Reversed · Receipt {tx.undoTransactionId}</p>}
                         </div>
                         <p
                           className={`font-semibold ${
@@ -941,7 +964,7 @@ export default function AdminWalletPage() {
               {/* Type Selection */}
               <div className="flex gap-2 mb-4">
                 <button
-                  onClick={() => setAdjustType("credit")}
+                  disabled={adjustLoading} aria-pressed={adjustType === "credit"} onClick={() => setAdjustType("credit")}
                   className={`flex-1 py-2 rounded-lg border ${
                     adjustType === "credit"
                       ? "bg-emerald-600 border-emerald-500"
@@ -951,7 +974,7 @@ export default function AdminWalletPage() {
                   + Credit
                 </button>
                 <button
-                  onClick={() => setAdjustType("debit")}
+                  disabled={adjustLoading} aria-pressed={adjustType === "debit"} onClick={() => setAdjustType("debit")}
                   className={`flex-1 py-2 rounded-lg border ${
                     adjustType === "debit"
                       ? "bg-red-600 border-red-500"
@@ -963,13 +986,14 @@ export default function AdminWalletPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm text-slate-300 mb-2">
+                <label htmlFor="adjustment-amount" className="block text-sm text-slate-300 mb-2">
                   Amount ($)
                 </label>
                 <input
                   type="number"
                   min="0.01"
                   step="0.01"
+                  id="adjustment-amount" disabled={adjustLoading}
                   value={adjustAmount}
                   onChange={(e) => setAdjustAmount(e.target.value)}
                   placeholder="Enter amount"
@@ -978,11 +1002,12 @@ export default function AdminWalletPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm text-slate-300 mb-2">
+                <label htmlFor="adjustment-reason" className="block text-sm text-slate-300 mb-2">
                   Reason (Required)
                 </label>
                 <input
                   type="text"
+                  id="adjustment-reason" disabled={adjustLoading}
                   value={adjustDescription}
                   onChange={(e) => setAdjustDescription(e.target.value)}
                   placeholder="Why are you making this adjustment?"
@@ -1036,7 +1061,7 @@ export default function AdminWalletPage() {
               )}
 
               <div className="flex gap-3">
-                <button
+                <button disabled={adjustLoading}
                   onClick={() => {
                     setShowAdjust(false);
                     setAdjustAmount("");
@@ -1062,6 +1087,7 @@ export default function AdminWalletPage() {
                       : "Confirm Debit"}
                 </button>
               </div>
+              {adjustError && <p role="alert" className="mt-3 text-sm text-amber-200">{adjustError}</p>}
               {!adjustDescription.trim() && (
                 <p className="text-xs text-amber-400 mt-2 text-center">
                   ⚠️ Reason is required for audit trail
