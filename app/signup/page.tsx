@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
 import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
@@ -73,7 +73,6 @@ const PASSWORD_RULES = [
 
 // PATCH_23: Inner component that uses useSearchParams
 function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = authReturnPath(searchParams.get("next"));
   const { toast } = useToast();
@@ -169,7 +168,7 @@ function SignupForm() {
         user: res.user || { role: "user", email },
       });
       toast("Account created successfully!", "success");
-      router.replace(next || "/dashboard");
+      window.location.replace(next || "/dashboard");
     } catch (err: any) {
       // PATCH_54: Better error handling
       const message = err.message || "Signup failed";

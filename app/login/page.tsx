@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
 import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
@@ -47,7 +47,6 @@ const EyeSlashIcon = () => (
 );
 
 function LoginForm() {
-  const router = useRouter();
   const next = authReturnPath(useSearchParams().get("next"));
   const { toast } = useToast();
   const [email, setEmail] = useState("");
@@ -110,7 +109,7 @@ function LoginForm() {
 
       setAuthSession({ token: res.token, user: res.user });
       toast("Login successful!", "success");
-      router.replace(next || "/dashboard");
+      window.location.replace(next || "/dashboard");
     } catch (err: any) {
       // PATCH_54: Better error handling
       const message = err.message || "Login failed";
