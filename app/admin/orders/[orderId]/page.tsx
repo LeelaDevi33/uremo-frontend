@@ -205,11 +205,11 @@ export default function AdminOrderDetailPage() {
 
   const badge = (status: string) => {
     const map: Record<string, string> = {
-      pending: "bg-blue-600",
-      waiting_user: "bg-yellow-600",
-      in_progress: "bg-purple-600",
-      completed: "bg-green-600",
-      cancelled: "bg-red-600",
+      pending: "bg-blue-700 text-white",
+      waiting_user: "bg-yellow-700 text-white",
+      in_progress: "bg-purple-700 text-white",
+      completed: "bg-green-700 text-white",
+      cancelled: "bg-red-700 text-white",
     };
     return map[status] || "bg-gray-600";
   };
@@ -362,7 +362,7 @@ export default function AdminOrderDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Admin — Order</h1>
         <StatusTooltip status={order.status}>
           <span className={`text-xs px-2 py-1 rounded ${badge(order.status)}`}>
@@ -371,7 +371,7 @@ export default function AdminOrderDetailPage() {
         </StatusTooltip>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <div className="space-y-2">
             <p className="text-sm text-[#9CA3AF]">User</p>
@@ -398,13 +398,14 @@ export default function AdminOrderDetailPage() {
               ↓ Use the action buttons below to proceed
             </p>
             <details className="group">
-              <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400">
+              <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-400">
                 Advanced: Manual status change
               </summary>
               <div className="flex gap-2 flex-wrap mt-2">
                 <select
                   className="px-3 py-2 text-sm rounded bg-[#020617] border border-[#1F2937] text-white opacity-70"
-                  value={order.status}
+                  aria-label="Order status"
+                value={order.status}
                   onChange={(e) => updateStatus(e.target.value)}
                   disabled={
                     order.status === "completed" || order.status === "cancelled"
@@ -521,7 +522,7 @@ export default function AdminOrderDetailPage() {
       </Card>
 
       <Card>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-lg">Chat</h3>
           <div className="flex items-center gap-3">
             <span
@@ -668,7 +669,7 @@ export default function AdminOrderDetailPage() {
           <div ref={endRef} />
         </div>
 
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {/* PATCH_91: Admin file upload button */}
           <input
             ref={fileInputRef}
@@ -688,7 +689,7 @@ export default function AdminOrderDetailPage() {
             {uploading ? "⏳" : "📎"}
           </button>
           <input
-            className="flex-1 rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#64748B]"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#94a3b8]"
             placeholder="Reply to user…"
             value={reply}
             onChange={(e) => {

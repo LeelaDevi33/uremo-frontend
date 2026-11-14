@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  ActionBar,
   AuditTrail,
   UndoToast,
   useUndoToast,
@@ -62,7 +61,7 @@ interface WithdrawalRequest {
 export default function AdminWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { ready, isAdmin, user: admin } = useAuth();
+  const { ready, isAdmin, isAuthenticated, user: admin } = useAuth();
   const undoToast = useUndoToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -70,6 +69,7 @@ export default function AdminWalletPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
+  const searchRequest = useRef(0);
   const [balanceFilter, setBalanceFilter] = useState<
     "all" | "high" | "medium" | "low"
   >("all");
@@ -116,14 +116,25 @@ export default function AdminWalletPage() {
   >("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await apiRequest("/api/admin/wallet/stats", "GET");
+      setStats(res.stats);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to load stats", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     if (!ready) return;
     if (!isAdmin) {
-      router.push("/admin/login");
+      router.replace(isAuthenticated ? "/dashboard" : "/login?next=%2Fadmin%2Fwallet");
       return;
     }
     fetchStats();
-  }, [ready, isAdmin, router]);
+  }, [ready, isAdmin, isAuthenticated, router, fetchStats]);
 
   useEffect(() => {
     if (!ready || !isAdmin) return;
@@ -145,16 +156,6 @@ export default function AdminWalletPage() {
     return () => { current = false; };
   }, [ready, isAdmin, withdrawalFilter, withdrawalBefore, withdrawalReload]);
 
-  const fetchStats = async () => {
-    try {
-      const res = await apiRequest("/api/admin/wallet/stats", "GET");
-      setStats(res.stats);
-    } catch (err: any) {
-      toast(err.message || "Failed to load stats", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // PATCH_80: Fetch pending topups
   const fetchPendingTopups = async () => {
@@ -205,13 +206,14 @@ export default function AdminWalletPage() {
       toast(res.message || `Topup ${action}d successfully`, "success");
       fetchPendingTopups(); // Refresh the list
       fetchStats(); // Refresh stats
-    } catch (err: any) {
+    } catch (err) {
       // PATCH_81: Handle already-processed case gracefully
-      if (err.payload?.alreadyProcessed) {
+      const payload = err instanceof ApiError ? err.payload : null;
+      if (payload && typeof payload === "object" && "alreadyProcessed" in payload && payload.alreadyProcessed === true) {
         toast("This topup was already processed by another admin", "info");
         fetchPendingTopups(); // Remove from list
       } else {
-        toast(err.message || `Failed to ${action} topup`, "error");
+        toast(err instanceof Error && err.message ? err.message : `Failed to ${action} topup`, "error");
       }
     } finally {
       setVerifyingId(null);
@@ -231,8 +233,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal approved", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to approve withdrawal", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to approve withdrawal", "error");
     } finally {
       setProcessingId(null);
     }
@@ -249,8 +251,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal marked as paid", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to mark withdrawal as paid", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to mark withdrawal as paid", "error");
     } finally {
       setProcessingId(null);
     }
@@ -270,8 +272,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal rejected", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to reject withdrawal", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to reject withdrawal", "error");
     } finally {
       setProcessingId(null);
     }
@@ -283,6 +285,7 @@ export default function AdminWalletPage() {
       return;
     }
 
+    const request = ++searchRequest.current;
     setSearching(true);
     try {
       const params = new URLSearchParams();
@@ -293,38 +296,45 @@ export default function AdminWalletPage() {
         `/api/admin/wallet/search?${params.toString()}`,
         "GET",
       );
+      if (request !== searchRequest.current) return;
       setSearchResults(res.users || []);
       if (res.users?.length === 0) {
         toast("No users found", "info");
       }
-    } catch (err: any) {
-      toast(err.message || "Search failed", "error");
+    } catch (err) {
+      if (request !== searchRequest.current) return;
+      toast(err instanceof Error && err.message ? err.message : "Search failed", "error");
     } finally {
-      setSearching(false);
+      if (request === searchRequest.current) setSearching(false);
     }
   };
 
   const filterByTier = async (tier: "all" | "high" | "medium" | "low") => {
     setBalanceFilter(tier);
     if (tier === "all") {
+      ++searchRequest.current;
+      setSearching(false);
       setSearchResults([]);
       return;
     }
 
+    const request = ++searchRequest.current;
     setSearching(true);
     try {
       const res = await apiRequest(
         `/api/admin/wallet/search?tier=${tier}`,
         "GET",
       );
+      if (request !== searchRequest.current) return;
       setSearchResults(res.users || []);
       if (res.users?.length === 0) {
         toast(`No ${tier} balance users found`, "info");
       }
-    } catch (err: any) {
-      toast(err.message || "Filter failed", "error");
+    } catch (err) {
+      if (request !== searchRequest.current) return;
+      toast(err instanceof Error && err.message ? err.message : "Filter failed", "error");
     } finally {
-      setSearching(false);
+      if (request === searchRequest.current) setSearching(false);
     }
   };
 
@@ -338,8 +348,8 @@ export default function AdminWalletPage() {
       if (request !== walletRequest.current) return;
       setSelectedUser(res.user);
       setUserTransactions(res.transactions || []);
-    } catch (err: any) {
-      toast(err.message || "Failed to load user wallet", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to load user wallet", "error");
     } finally {
       if (request === walletRequest.current) setUserLoading(false);
     }
@@ -457,7 +467,7 @@ export default function AdminWalletPage() {
               <p className="text-2xl font-bold text-green-400">
                 ${stats.credits.total.toFixed(2)}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {stats.credits.count} transactions
               </p>
             </div>
@@ -466,7 +476,7 @@ export default function AdminWalletPage() {
               <p className="text-2xl font-bold text-red-400">
                 ${stats.debits.total.toFixed(2)}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {stats.debits.count} transactions
               </p>
             </div>
@@ -504,7 +514,7 @@ export default function AdminWalletPage() {
                         <p className="text-sm text-slate-400">
                           {topup.user?.email || "No email"}
                         </p>
-                        <p className="text-xs text-slate-500 mt-1">
+                        <p className="text-xs text-slate-400 mt-1">
                           Requested:{" "}
                           {new Date(topup.createdAt).toLocaleString()}
                         </p>
@@ -606,7 +616,7 @@ export default function AdminWalletPage() {
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
                     withdrawalFilter === status
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-800 text-white"
                       : "bg-slate-800 text-slate-400 hover:bg-slate-700"
                   }`}
                 >
@@ -764,7 +774,7 @@ export default function AdminWalletPage() {
                 <span className="text-sm text-slate-400 mr-2">
                   Quick Filter:
                 </span>
-                {[
+                {([
                   { key: "all", label: "All", color: "slate" },
                   { key: "high", label: "🔥 High ($500+)", color: "emerald" },
                   {
@@ -773,18 +783,18 @@ export default function AdminWalletPage() {
                     color: "blue",
                   },
                   { key: "low", label: "💧 Low (<$100)", color: "yellow" },
-                ].map((tier) => (
+                ] as const).map((tier) => (
                   <button
                     key={tier.key}
-                    onClick={() => filterByTier(tier.key as any)}
+                    onClick={() => filterByTier(tier.key)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                       balanceFilter === tier.key
                         ? tier.key === "high"
-                          ? "bg-emerald-600 text-white"
+                          ? "bg-emerald-800 text-white"
                           : tier.key === "medium"
-                            ? "bg-blue-600 text-white"
+                            ? "bg-blue-800 text-white"
                             : tier.key === "low"
-                              ? "bg-yellow-600 text-white"
+                              ? "bg-yellow-800 text-white"
                               : "bg-slate-600 text-white"
                         : "bg-slate-800 text-slate-300 hover:bg-slate-700"
                     }`}
@@ -849,7 +859,7 @@ export default function AdminWalletPage() {
                 <p className="text-slate-400 mb-2">
                   Search and select a user to view their wallet
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-400">
                   Use the search box or quick filters on the left to find a
                   user, then click to see their balance and transaction history.
                 </p>
@@ -877,11 +887,11 @@ export default function AdminWalletPage() {
                 <h3 className="font-medium mb-2">Recent Transactions</h3>
                 {userTransactions.length === 0 ? (
                   <div className="text-center py-4">
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-400">
                       No transactions yet
                     </p>
-                    <p className="text-xs text-slate-600 mt-1">
-                      Transactions appear when you adjust this user's balance or
+                    <p className="text-xs text-slate-400 mt-1">
+                      Transactions appear when you adjust this user’s balance or
                       when they make purchases.
                     </p>
                   </div>
@@ -899,7 +909,7 @@ export default function AdminWalletPage() {
                           {tx.methodName && <p className="text-xs text-slate-300">Funding method: {tx.methodName}</p>}
                           {tx.paymentReference && <p className="break-all text-xs text-slate-300">Submitted transfer reference: {tx.paymentReference}</p>}
                           {tx.settlementReference && <p className="break-all text-xs text-slate-300">Payment reference: {tx.settlementReference}</p>}
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-400">
                             {new Date(tx.createdAt).toLocaleString()}
                           </p>
                           {tx.canUndo && <button type="button" disabled={!!undoing} className="mt-1 text-sm text-teal-300 underline"
@@ -1018,7 +1028,7 @@ export default function AdminWalletPage() {
               {/* PATCH_66: Preview of Change */}
               {adjustAmount && parseFloat(adjustAmount) > 0 && (
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-4">
-                  <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                  <div className="text-xs text-slate-400 uppercase tracking-wider mb-2">
                     Preview of Changes
                   </div>
                   <div className="space-y-2 text-sm">

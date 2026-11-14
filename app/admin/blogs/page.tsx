@@ -65,7 +65,7 @@ export default function AdminBlogsPage() {
   const [existingFeaturedImage, setExistingFeaturedImage] = useState<
     string | null
   >(null);
-  const [imageCacheBust, setImageCacheBust] = useState<number>(Date.now());
+  const [imageCacheBust, setImageCacheBust] = useState<number>(0);
 
   // Search/filter
   const [searchTerm, setSearchTerm] = useState("");

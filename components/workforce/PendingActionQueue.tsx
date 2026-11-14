@@ -141,7 +141,7 @@ export default function PendingActionQueue({
                     href={`/admin/workforce/${app._id}`}
                     className="font-medium text-white truncate hover:text-cyan-400 transition-colors block"
                   >
-                    {app.userId?.firstName} {app.userId?.lastName}
+                    {[app.userId?.firstName, app.userId?.lastName].filter(Boolean).join(" ") || app.userId?.email || "View applicant"}
                   </Link>
                   <p className="text-xs text-slate-400 truncate">
                     Applied for: {app.positionTitle || "Position"}
@@ -157,7 +157,7 @@ export default function PendingActionQueue({
                   <button
                     onClick={() => onAction("approve_application", app._id)}
                     disabled={actionLoading === app._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === app._id ? "..." : "✓ Approve"}
                   </button>
@@ -209,7 +209,7 @@ export default function PendingActionQueue({
                     href={`/admin/workforce/${s._id}`}
                     className="font-medium text-white truncate hover:text-cyan-400 transition-colors block"
                   >
-                    {s.workerId?.firstName} {s.workerId?.lastName}
+                    {[s.workerId?.firstName, s.workerId?.lastName].filter(Boolean).join(" ") || "View worker"}
                   </Link>
                   <p className="text-xs text-slate-400 truncate">
                     {s.positionTitle || "Position"} • Attempt{" "}
@@ -226,7 +226,7 @@ export default function PendingActionQueue({
                   <button
                     onClick={() => onAction("pass_screening", s._id)}
                     disabled={actionLoading === s._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === s._id ? "..." : "✓ Pass"}
                   </button>
@@ -289,7 +289,7 @@ export default function PendingActionQueue({
                       })
                     }
                     disabled={actionLoading === proof._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === proof._id ? "..." : "✓ Approve & Credit"}
                   </button>
@@ -353,7 +353,7 @@ export default function PendingActionQueue({
                     })
                   }
                   disabled={actionLoading === credit._id}
-                  className="px-4 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 shrink-0 ml-4"
+                  className="px-4 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50 shrink-0 ml-4"
                 >
                   {actionLoading === credit._id ? "..." : "Credit Now"}
                 </button>

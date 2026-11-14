@@ -480,8 +480,8 @@ function ScreeningsContent() {
         >
           ← Master Workspace
         </Link>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col items-start gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="text-3xl">📝</span>
             <div>
               <h1 className="text-2xl font-bold">Screenings</h1>
@@ -494,12 +494,12 @@ function ScreeningsContent() {
                 )}
               </p>
               {/* PATCH_79: Flow guidance */}
-              <p className="text-xs text-cyan-400/70 mt-1">
+              <p className="text-xs text-cyan-300 mt-1">
                 Workers must pass screenings before they can work on projects.
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button onClick={() => setShowModal(true)} className="btn-primary">
               + Create Screening
             </button>
@@ -604,10 +604,10 @@ function ScreeningsContent() {
                 key={screening._id}
                 className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-colors"
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <h3 className="font-semibold text-white">
+                      <h3 className="break-words font-semibold text-white">
                         {screening.title}
                       </h3>
                       {/* Status Badge */}
@@ -644,7 +644,7 @@ function ScreeningsContent() {
                     <p className="text-sm text-slate-400 line-clamp-2">
                       {screening.description}
                     </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
                       <span>
                         📚 {screening.questions?.length || 0} questions
                       </span>
@@ -675,7 +675,7 @@ function ScreeningsContent() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-wrap gap-2 sm:shrink-0 sm:flex-col">
                     <Link
                       href={`/admin/workspace/screenings/${screening._id}`}
                       className="btn-secondary text-sm text-center"

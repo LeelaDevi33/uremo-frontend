@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 
@@ -65,11 +64,11 @@ interface AdminUser {
 const statusColor = (status: string) => {
   switch (status) {
     case "open":
-      return "bg-blue-600";
+      return "bg-blue-800 text-white";
     case "in_progress":
-      return "bg-yellow-600";
+      return "bg-yellow-800 text-white";
     case "waiting_user":
-      return "bg-orange-600";
+      return "bg-orange-800 text-white";
     case "closed":
       return "bg-gray-600";
     default:
@@ -397,12 +396,7 @@ export default function AdminTicketViewPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="u-container max-w-4xl py-8"
-    >
+    <div className="u-container max-w-4xl py-8">
       <div className="mb-6">
         <Link
           href="/admin/tickets"
@@ -480,10 +474,11 @@ export default function AdminTicketViewPage() {
                 </p>
                 {/* Collapsed status dropdown */}
                 <details className="group">
-                  <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 text-center">
+                  <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-400 text-center">
                     Change status
                   </summary>
                   <select
+                    aria-label="Ticket status"
                     value={ticket.status}
                     onChange={(e) => updateStatus(e.target.value)}
                     disabled={updatingStatus}
@@ -498,6 +493,7 @@ export default function AdminTicketViewPage() {
               </>
             )}
             <select
+                    aria-label="Assigned administrator"
               value={ticket.assignedAdmin?._id || ""}
               onChange={(e) => assignTicket(e.target.value)}
               disabled={assigningAdmin}
@@ -714,6 +710,6 @@ export default function AdminTicketViewPage() {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

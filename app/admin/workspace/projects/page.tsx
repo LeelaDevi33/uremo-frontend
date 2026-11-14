@@ -694,7 +694,7 @@ function ProjectsContent() {
                       {s.active ? "Active" : "Inactive"}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="text-xs text-slate-400 mt-1">
                     Category:{" "}
                     <span className="text-purple-400">
                       {getJobRoleCategoryLabel(s.category)}
@@ -742,7 +742,7 @@ function ProjectsContent() {
                   </li>
                 )}
               </ul>
-              <p className="text-xs text-slate-500 mt-2">
+              <p className="text-xs text-slate-400 mt-2">
                 💡 Tip: Workers must be in "Ready to Work" status before they
                 can be assigned projects.
                 <Link
@@ -849,7 +849,7 @@ function ProjectsContent() {
                     </p>
                   )}
                   {project.assignedTo && (
-                    <p className="text-xs text-slate-500 mt-2">
+                    <p className="text-xs text-slate-400 mt-2">
                       Assigned to: {project.assignedTo.name || [project.assignedTo.firstName, project.assignedTo.lastName].filter(Boolean).join(" ") || "Archived worker"}
                     </p>
                   )}
@@ -860,7 +860,7 @@ function ProjectsContent() {
                     <p className="text-sm font-medium text-emerald-400">
                       ${project.payRate?.toFixed(2) || "0.00"}
                     </p>
-                    <p className="text-xs text-slate-500">Payout</p>
+                    <p className="text-xs text-slate-400">Payout</p>
                   </div>
 
                   {/* PATCH_65.1: View/Edit/Delete buttons */}
@@ -924,12 +924,12 @@ function ProjectsContent() {
                   {/* PATCH_74: Terminal state finality indicators */}
                   {project.status === "completed" &&
                     project.earningsCredited && (
-                      <span className="text-xs text-slate-500 ml-2">
+                      <span className="text-xs text-slate-400 ml-2">
                         🔒 Final
                       </span>
                     )}
                   {project.status === "cancelled" && (
-                    <span className="text-xs text-slate-500 ml-2">
+                    <span className="text-xs text-slate-400 ml-2">
                       🔒 Cancelled
                     </span>
                   )}
@@ -958,7 +958,7 @@ function ProjectsContent() {
           >
             + Create Your First Project
           </button>
-          <div className="text-sm text-slate-500 space-y-1">
+          <div className="text-sm text-slate-400 space-y-1">
             <p>Before assigning projects, make sure you have:</p>
             <p>
               1.{" "}
@@ -1096,7 +1096,7 @@ function ProjectsContent() {
                     page.
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Projects are assigned to workers in this job role. Workers
                     must pass the job role&apos;s screening test to be eligible.
                   </p>
@@ -1111,7 +1111,7 @@ function ProjectsContent() {
                 {screenings.filter(s => s.active !== false).map(s => <label className="block" key={s._id}>
                   <input type="checkbox" checked={form.screeningIds.includes(s._id)} onChange={e => setForm({ ...form, screeningIds: e.target.checked ? [...form.screeningIds, s._id] : form.screeningIds.filter(id => id !== s._id) })} /> {s.title} ({s.category})
                 </label>)}
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   Add project screenings here. The selected role’s requirements also apply.
                 </p>
               </div>
@@ -1218,7 +1218,7 @@ function ProjectsContent() {
                     🔒 Requires: Passed screening test
                   </p>
                 ) : (
-                  <p className="text-slate-500">• No screening required</p>
+                  <p className="text-slate-400">• No screening required</p>
                 )}
               </div>
             </div>
@@ -1372,7 +1372,7 @@ function ProjectsContent() {
                 }
                 className="input w-full"
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Default payout: ${creditModal.payRate?.toFixed(2) || "0.00"}
               </p>
             </div>
@@ -1476,7 +1476,7 @@ function ProjectsContent() {
                     <p className="text-lg font-semibold text-emerald-400">
                       ${viewData.project?.payRate?.toFixed(2) || "0.00"}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-slate-400">
                       {viewData.project?.payType || "per_task"}
                     </p>
                   </div>
@@ -1487,7 +1487,7 @@ function ProjectsContent() {
                       {viewData.project?.earningsCredited?.toFixed(2) || "0.00"}
                     </p>
                     {viewData.project?.creditedAt && (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400">
                         {new Date(
                           viewData.project.creditedAt,
                         ).toLocaleDateString()}
@@ -1750,7 +1750,7 @@ function ProjectsContent() {
                 </label>
                 <div className="space-y-2 max-h-48 overflow-y-auto p-2 rounded-lg bg-black/20 border border-white/10">
                   {screenings.length === 0 ? (
-                    <p className="text-xs text-slate-500 p-2">
+                    <p className="text-xs text-slate-400 p-2">
                       No screening tests available
                     </p>
                   ) : (
@@ -1786,7 +1786,7 @@ function ProjectsContent() {
                           />
                           <span className="text-sm">
                             {s.title}{" "}
-                            <span className="text-slate-500">
+                            <span className="text-slate-400">
                               ({s.category})
                             </span>
                           </span>
@@ -1794,7 +1794,7 @@ function ProjectsContent() {
                       ))
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   Workers must pass ALL selected tests to be eligible for this
                   project
                 </p>

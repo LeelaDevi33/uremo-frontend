@@ -9,6 +9,7 @@ import { briefFields, briefPayload, experienceLabels, roleReviewNotes, workModeL
 type Role = RoleBrief & {
   _id: string; title: string; category: string;
   adminNotes?: string; active?: boolean; isSpecialization?: boolean; sortOrder?: number; revision?: string; updatedAt?: string;
+  directoryExclusionReason?: string;
   hasScreening?: boolean; screeningId?: unknown; screeningIds?: unknown[]; trainingMaterials?: unknown[];
 };
 function fields(role?: Role) {
@@ -109,6 +110,7 @@ export default function AdminWorkPositionsPage() {
     {notice && <p role="status" className="mb-3 rounded border border-emerald-800 bg-emerald-950/40 p-3">{notice}</p>}
     {draft && editor ? <form className={panel + " max-w-3xl"} onSubmit={save}>
       <fieldset disabled={busy} className="space-y-4">
+        {editor.role?.directoryExclusionReason && <p className="text-sm text-amber-200">{editor.role.directoryExclusionReason}</p>}
         <div className="grid gap-4 sm:grid-cols-2"><label>Role title<input className={input} maxLength={80} required value={draft.title} onChange={e => update("title", e.target.value)} /></label>
         <label>Role category<input className={input} maxLength={48} required value={draft.category} list="job-role-categories" onChange={e => update("category", e.target.value)} />
           <datalist id="job-role-categories">{suggestions.map(value => <option key={value} value={value} />)}</datalist></label></div>
@@ -154,7 +156,9 @@ export default function AdminWorkPositionsPage() {
       </div>
       {loading ? <p role="status">Loading roles…</p> : !visible.length ? <div className={panel}><p>{error ? "Roles could not be displayed." : rows.length ? "No roles match these filters." : "No specializations have been created."}</p></div> :
         <ul className="grid gap-3 md:grid-cols-2">{visible.map(role => <li className={panel + " min-w-0"} key={role._id}>
-          <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : role.isSpecialization === false ? "Outside role directory" : "Active"}</span></div>
+          <div className="flex items-start justify-between gap-2"><h2 className="break-words text-xl font-semibold">{role.title}</h2><span>{role.active === false ? "Inactive" : "Active"}</span></div>
+          {role.isSpecialization === false && <p className="mt-2 text-sm">Outside role directory</p>}
+          {role.directoryExclusionReason && <p className="mt-1 text-sm text-amber-200">{role.directoryExclusionReason}</p>}
           <p className="mt-1 text-sm text-slate-400">{role.category} · Display order {role.sortOrder ?? 0}</p>
           {notes.has(role._id) && <ul aria-label="Role review notes" className="mt-2 list-inside list-disc text-sm text-amber-200">
             {notes.get(role._id)?.map(note => <li key={note}>{note}</li>)}</ul>}

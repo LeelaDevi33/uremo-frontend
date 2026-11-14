@@ -17,8 +17,7 @@ export default function Footer() {
   const support = settings?.support || DEFAULT_PUBLIC_SITE_SETTINGS.support;
   const site = settings?.site || DEFAULT_PUBLIC_SITE_SETTINGS.site;
 
-  const supportEmail =
-    support.supportEmail || DEFAULT_PUBLIC_SITE_SETTINGS.support.supportEmail;
+  const supportEmail = support.supportEmail;
 
   return (
     <footer className="border-t border-white/10 bg-black/20 backdrop-blur">
@@ -74,7 +73,8 @@ export default function Footer() {
                 DEFAULT_PUBLIC_SITE_SETTINGS.footer.supportTitle}
             </div>
             <div className="mt-3 text-slate-300">
-              {supportEmail ? <div className="leading-relaxed">
+              <Link href="/support/tickets" className="text-white/90 hover:text-white underline underline-offset-4">Open a support ticket</Link>
+              {supportEmail && <div className="mt-2 leading-relaxed">
                 {footer.supportPrompt ||
                   DEFAULT_PUBLIC_SITE_SETTINGS.footer.supportPrompt}{" "}
                 <a
@@ -83,7 +83,7 @@ export default function Footer() {
                 >
                   {supportEmail}
                 </a>
-              </div> : <Link href="/support/tickets" className="underline">Open a support ticket</Link>}
+              </div>}
               {support.whatsappNumber ? (
                 <div className="mt-2 text-slate-400">
                   {(footer.whatsappLabel ||

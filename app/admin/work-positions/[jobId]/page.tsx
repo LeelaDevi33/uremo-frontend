@@ -865,6 +865,7 @@ export default function AdminJobRolePage() {
           <div className="flex gap-2 flex-wrap items-center justify-between">
             <div className="flex gap-2">
               <select
+                aria-label="Filter applicants by status"
                 value={statusFilter}
                 onChange={(e) => { setApplicantPage(1); setStatusFilter(e.target.value); }}
                 className="bg-[#1f2937] border border-white/10 rounded-lg px-3 py-2 text-sm"
@@ -1847,6 +1848,7 @@ export default function AdminJobRolePage() {
                       Pay Type
                     </label>
                     <select
+                      aria-label="Project pay type"
                       value={editingProject.payType}
                       onChange={(e) =>
                         setEditingProject({

@@ -350,7 +350,7 @@ function AdminOrdersContent() {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto focus-visible:outline-2" role="region" aria-label="Orders table" tabIndex={0}>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left sticky top-0 bg-[#0B1220]/90 backdrop-blur border-b border-white/10">

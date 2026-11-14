@@ -906,7 +906,7 @@ export default function Worker360Page() {
           {/* SECTION 1: IDENTITY BLOCK - PATCH_79: Enhanced */}
           <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700/50">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-              <div className="flex items-start gap-4">
+              <div className="flex min-w-0 flex-col items-start gap-4 sm:flex-row">
                 {/* Avatar */}
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-3xl font-bold text-white flex-shrink-0">
                   {hasValidIdentity
@@ -914,7 +914,7 @@ export default function Worker360Page() {
                     : "?"}
                 </div>
 
-                <div className="flex-1">
+                <div className="w-full min-w-0 flex-1">
                   {/* Page Title - PATCH_79: Single question focus */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-2xl">🧭</span>
@@ -927,7 +927,7 @@ export default function Worker360Page() {
                   </p>
 
                   {/* Worker Name */}
-                  <h2 className="text-xl font-semibold text-white flex items-center gap-2 mb-2">
+                  <h2 className="mb-2 flex flex-wrap items-center gap-2 break-words text-xl font-semibold text-white">
                     {workerName}
                     {!hasValidIdentity && (
                       <span className="text-red-400 text-xs font-normal bg-red-500/20 px-2 py-1 rounded">
@@ -939,7 +939,7 @@ export default function Worker360Page() {
                   {/* Identity Details Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                     <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-slate-500 text-xs">Email</p>
+                      <p className="text-slate-400 text-xs">Email</p>
                       <p
                         className="text-white font-medium truncate cursor-pointer hover:text-cyan-400 transition"
                         onClick={() => {
@@ -954,13 +954,13 @@ export default function Worker360Page() {
                       </p>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-slate-500 text-xs">Worker ID</p>
+                      <p className="text-slate-400 text-xs">Worker ID</p>
                       <p className="text-white font-mono text-xs">
                         {worker._id.slice(-8)}
                       </p>
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-slate-500 text-xs">Job Role</p>
+                      <p className="text-slate-400 text-xs">Job Role</p>
                       {worker.position?._id ? (
                         <Link
                           href={`/admin/work-positions/${worker.position._id}`}
@@ -975,7 +975,7 @@ export default function Worker360Page() {
                       )}
                     </div>
                     <div className="bg-slate-800/50 rounded-lg p-2">
-                      <p className="text-slate-500 text-xs">Applied</p>
+                      <p className="text-slate-400 text-xs">Applied</p>
                       <p className="text-white font-medium">
                         {new Date(worker.createdAt).toLocaleDateString()}
                       </p>
@@ -999,7 +999,7 @@ export default function Worker360Page() {
                 {/* PATCH_74: Terminal state finality indicator */}
                 {(worker.workerStatus === "suspended" ||
                   worker.workerStatus === "failed") && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     🔒 Flow paused — action required to continue
                   </p>
                 )}
@@ -1143,7 +1143,7 @@ export default function Worker360Page() {
           {/* PATCH_79: Current State Banner */}
           <div className="mb-6 p-4 rounded-lg bg-slate-900/50 border border-slate-700/50">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-500 uppercase tracking-wider">Current Status</span>
+              <span className="text-xs text-slate-400 uppercase tracking-wider">Current Status</span>
               <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLORS[worker.workerStatus] || STATUS_COLORS.applied}`}
               >
@@ -1354,7 +1354,7 @@ export default function Worker360Page() {
                 <button
                   onClick={() => chooseProject()}
                   title="Opens project assignment modal - worker status will change to Assigned"
-                  className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition flex items-center gap-2"
+                  className="px-6 py-3 bg-cyan-800 hover:bg-cyan-900 text-white rounded-lg font-medium transition flex items-center gap-2"
                 >
                   📦 Assign Project
                 </button>
@@ -1412,7 +1412,7 @@ export default function Worker360Page() {
                   <button
                     onClick={() => chooseProject()}
                     title="Opens project assignment modal - worker status will change to Assigned"
-                    className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition flex items-center gap-2"
+                    className="px-6 py-3 bg-cyan-800 hover:bg-cyan-900 text-white rounded-lg font-medium transition flex items-center gap-2"
                   >
                     📦 Assign New Project
                   </button>
@@ -1631,7 +1631,7 @@ export default function Worker360Page() {
                             📄 View Resume
                           </a>
                         ) : (
-                          <p className="text-slate-500">No resume uploaded</p>
+                          <p className="text-slate-400">No resume uploaded</p>
                         )}
                       </div>
                     </div>
@@ -1933,7 +1933,7 @@ export default function Worker360Page() {
                                   {project.description}
                                 </p>
                               )}
-                              <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                              <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
                                 {project.assignedAt && (
                                   <span>
                                     Assigned:{" "}
@@ -2417,7 +2417,7 @@ export default function Worker360Page() {
             <div className="mb-6">
               <label className="block text-sm text-slate-400 mb-2">
                 Suspension End Date{" "}
-                <span className="text-slate-500">(optional)</span>
+                <span className="text-slate-400">(optional)</span>
               </label>
               <input
                 type="date"
@@ -2426,7 +2426,7 @@ export default function Worker360Page() {
                 min={new Date().toISOString().split("T")[0]}
                 className="w-full bg-slate-900 text-white rounded-lg px-4 py-3 border border-slate-700 focus:border-cyan-500 outline-none"
               />
-              <p className="text-slate-500 text-xs mt-1">
+              <p className="text-slate-400 text-xs mt-1">
                 Leave empty for indefinite suspension
               </p>
             </div>

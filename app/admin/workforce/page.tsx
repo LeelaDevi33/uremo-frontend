@@ -1,5 +1,7 @@
 "use client";
 
+import { workerIdentity } from "./[workerId]/workerIdentity";
+
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -156,7 +158,7 @@ export default function WorkforceControlCenterPage() {
           .filter((a: any) => a.status === "pending")
           .map((a: any) => ({
             _id: a._id,
-            userId: a.user || a.userId,
+            userId: workerIdentity(a.user, a.userId),
             positionTitle: a.positionTitle || a.position?.title,
             createdAt: a.createdAt,
           })),
@@ -600,22 +602,22 @@ export default function WorkforceControlCenterPage() {
         
         {/* PATCH_79: Worker Flow Mental Model */}
         <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-slate-800/50 via-slate-800/80 to-slate-800/50 border border-slate-700/50">
-          <p className="text-xs text-slate-500 mb-2">📊 Worker Progression (Step-Based — No Skipping):</p>
+          <p className="text-xs text-slate-400 mb-2">📊 Worker Progression (Step-Based — No Skipping):</p>
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <span className="px-2 py-1 rounded bg-slate-500/20 text-slate-300">Applied</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300">Screening</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-300">Test Submitted</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">Ready to Work</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-cyan-500/20 text-cyan-300">Assigned</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-blue-500/20 text-blue-300">Working</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-300">Proof</span>
-            <span className="text-slate-600">→</span>
+            <span className="text-slate-400">→</span>
             <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-300">🔒 Completed</span>
           </div>
         </div>
@@ -623,7 +625,7 @@ export default function WorkforceControlCenterPage() {
         {/* PATCH_79: What to do next - Enhanced guidance */}
         {!loading && (
           <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-slate-800/50 to-purple-500/10 border border-blue-500/20">
-            <div className="flex items-start gap-3">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
               <span className="text-2xl">⚡</span>
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-white mb-1">
@@ -631,7 +633,7 @@ export default function WorkforceControlCenterPage() {
                 </h3>
                 <ul className="text-sm text-slate-300 space-y-1">
                   {stats.applied > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center">1</span>
                       <span className="text-amber-400 font-medium">
                         {stats.applied} application{stats.applied > 1 ? "s" : ""}
@@ -641,7 +643,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {stats.testSubmitted > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-xs flex items-center justify-center">2</span>
                       <span className="text-purple-400 font-medium">
                         {stats.testSubmitted} test{stats.testSubmitted > 1 ? "s" : ""} submitted
@@ -651,7 +653,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {stats.readyToWork > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">3</span>
                       <span className="text-emerald-400 font-medium">
                         {stats.readyToWork} worker{stats.readyToWork > 1 ? "s" : ""} ready
@@ -661,7 +663,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {pendingProofs.length > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 text-xs flex items-center justify-center">4</span>
                       <span className="text-cyan-400 font-medium">
                         {pendingProofs.length} proof{pendingProofs.length > 1 ? "s" : ""} pending
@@ -682,7 +684,7 @@ export default function WorkforceControlCenterPage() {
               </div>
               <Link
                 href="/admin/work-positions"
-                className="text-xs text-slate-400 hover:text-white whitespace-nowrap"
+                className="col-start-2 w-fit text-xs text-slate-400 hover:text-white lg:col-start-auto"
               >
                 → Job Roles Setup
               </Link>
@@ -731,14 +733,14 @@ export default function WorkforceControlCenterPage() {
               className="p-3 rounded-xl bg-white/5 border border-white/5 text-center"
             >
               <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
-              <p className="text-xs text-slate-500">{stat.label}</p>
+              <p className="text-xs text-slate-400">{stat.label}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-6">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl bg-white/5 p-1">
         {[
           { id: "pipeline" as TabType, label: "Pipeline", icon: "📊" },
           { id: "workers" as TabType, label: "All Workers", icon: "👥" },
@@ -755,17 +757,18 @@ export default function WorkforceControlCenterPage() {
         ].map((tab) => (
           <button
             key={tab.id}
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-800 text-white"
                 : "text-slate-400 hover:text-white hover:bg-white/5"
             }`}
           >
             <span>{tab.icon}</span>
             <span>{tab.label}</span>
             {tab.badge ? (
-              <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+              <span className="ml-1 px-2 py-0.5 bg-red-800 text-white text-xs rounded-full">
                 {tab.badge}
               </span>
             ) : null}
@@ -805,6 +808,7 @@ export default function WorkforceControlCenterPage() {
                 />
               </div>
               <select
+                aria-label="Filter workers by status"
                 value={workerFilter}
                 onChange={(e) => setWorkerFilter(e.target.value)}
                 className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
@@ -949,7 +953,7 @@ export default function WorkforceControlCenterPage() {
 
       {/* Quick Links */}
       <div className="mt-8 pt-6 border-t border-white/10">
-        <p className="text-xs text-slate-500 mb-3">Related Pages:</p>
+        <p className="text-xs text-slate-400 mb-3">Related Pages:</p>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/admin/workspace/projects"

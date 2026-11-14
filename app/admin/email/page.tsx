@@ -158,10 +158,11 @@ export default function AdminEmailCampaignsPage() {
         <Card>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-slate-300 mb-2">
+              <label htmlFor="campaign-subject" className="block text-sm text-slate-300 mb-2">
                 Subject
               </label>
               <input
+                id="campaign-subject"
                 className="w-full rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#64748B]"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
@@ -171,10 +172,11 @@ export default function AdminEmailCampaignsPage() {
             </div>
 
             <div>
-              <label className="block text-sm text-slate-300 mb-2">
+              <label htmlFor="campaign-audience" className="block text-sm text-slate-300 mb-2">
                 Audience
               </label>
               <select
+                id="campaign-audience"
                 className="w-full rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white"
                 value={audience}
                 onChange={(e) => setAudience(e.target.value as Audience)}
@@ -192,10 +194,11 @@ export default function AdminEmailCampaignsPage() {
 
             {audience === "custom" && (
               <div>
-                <label className="block text-sm text-slate-300 mb-2">
+                <label htmlFor="campaign-recipients" className="block text-sm text-slate-300 mb-2">
                   Custom emails (comma or newline separated)
                 </label>
                 <textarea
+                  id="campaign-recipients"
                   className="w-full min-h-[90px] rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#64748B]"
                   value={customEmailsText}
                   onChange={(e) => setCustomEmailsText(e.target.value)}
@@ -209,7 +212,7 @@ export default function AdminEmailCampaignsPage() {
             )}
 
             <div className="flex items-center justify-between gap-3">
-              <label className="block text-sm text-slate-300">
+              <label htmlFor={preview ? undefined : "campaign-html"} className="block text-sm text-slate-300">
                 HTML Content
               </label>
               <button
@@ -224,15 +227,16 @@ export default function AdminEmailCampaignsPage() {
 
             {!preview ? (
               <textarea
+                id="campaign-html"
                 className="w-full min-h-[320px] font-mono rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-xs text-white placeholder:text-[#64748B]"
                 value={htmlContent}
                 onChange={(e) => setHtmlContent(e.target.value)}
                 disabled={sending}
               />
             ) : (
-              <div className="min-h-[320px] rounded-lg border border-white/10 bg-white p-4 overflow-auto">
-                <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
-              </div>
+              <iframe title="Email preview" sandbox="" referrerPolicy="no-referrer"
+                className="block min-h-[320px] w-full rounded-lg border border-white/10 bg-white"
+                srcDoc={'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https: data:; style-src \'unsafe-inline\'; base-uri \'none\'; form-action \'none\'">' + htmlContent} />
             )}
 
             <div className="flex gap-3 flex-wrap items-center">

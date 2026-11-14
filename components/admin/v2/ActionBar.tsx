@@ -36,11 +36,11 @@ const variantStyles = {
 export default function ActionBar({ actions, sticky = true }: ActionBarProps) {
   return (
     <div
-      className={`flex items-center gap-2 p-3 bg-[#0a0d14]/95 backdrop-blur-sm border border-white/10 rounded-xl ${
+      className={`flex flex-wrap items-center gap-2 p-3 bg-[#0a0d14]/95 backdrop-blur-sm border border-white/10 rounded-xl ${
         sticky ? "sticky top-4 z-30" : ""
       }`}
     >
-      <span className="text-xs text-slate-500 mr-2">Actions:</span>
+      <span className="mr-2 text-xs text-slate-400">Actions:</span>
       {actions.map((action) => {
         const { key, ...actionProps } = action;
         return <ActionButton key={key} {...actionProps} />;

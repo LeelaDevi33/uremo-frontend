@@ -133,7 +133,7 @@ export default function WalletPage() {
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
-  const [returnError, setReturnError] = useState("");
+  const [returnError, setReturnError] = useState<{ message: string; canRetry: boolean } | null>(null);
   const [verifyingId, setVerifyingId] = useState("");
   const [returnAttempt, setReturnAttempt] = useState(0);
   const activeReturn = useRef("");
@@ -175,20 +175,20 @@ export default function WalletPage() {
         toast("PayPal checkout cancelled.", "info");
         window.history.replaceState(null, "", "/wallet");
       }
-      if (state === "success") setReturnError("PayPal did not return an order ID. Check your wallet history or contact support.");
+      if (state === "success") setReturnError({ message: "PayPal did not return an order ID. Check your wallet history or contact support.", canRetry: false });
       return;
     }
     const key = orderId + ":" + returnAttempt;
     if (activeReturn.current === key) return;
     activeReturn.current = key;
-    setReturnError("");
+    setReturnError(null);
     async function confirm(id: string) {
       try {
         await confirmPayPalPayment(id);
         window.history.replaceState(null, "", "/wallet");
         toast("PayPal payment confirmed. Your wallet has been credited.", "success");
       } catch (cause) {
-        setReturnError(cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.");
+        setReturnError({ message: cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.", canRetry: true });
       } finally { await fetchData(); }
     }
     void confirm(orderId);
@@ -288,7 +288,7 @@ export default function WalletPage() {
           {loadError} <button className="ml-2 underline" onClick={fetchData}>Reload wallet</button>
         </div>}
         {returnError && <div role="alert" className="mb-4 rounded-lg border border-amber-600/50 p-3 text-amber-200">
-          {returnError} {activeReturn.current && <button className="ml-2 underline" onClick={() => setReturnAttempt(value => value + 1)}>Check payment again</button>}
+          {returnError.message} {returnError.canRetry && <button className="ml-2 underline" onClick={() => setReturnAttempt(value => value + 1)}>Check payment again</button>}
         </div>}
         {/* ===== HEADER WITH SECURITY BADGE ===== */}
         <motion.div
@@ -454,7 +454,7 @@ export default function WalletPage() {
               <div className="flex flex-wrap gap-3 justify-center">
                 <button
                   onClick={() => setShowTopUp(true)}
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl font-medium transition-colors"
+                  className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-6 py-3 rounded-xl font-medium transition-colors"
                 >
                   <IconPlus />
                   Add Balance
@@ -506,7 +506,7 @@ export default function WalletPage() {
                           ? tx.failureReason
                           : tx.description || getSourceLabel(tx.source)}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-400 mt-0.5">
                         {tx.methodName && <span className="block">{tx.methodName}</span>}
                         {tx.paymentReference && <span className="block break-all">Transfer reference: {tx.paymentReference}</span>}
                         {new Date(tx.createdAt).toLocaleDateString("en-US", {
@@ -538,11 +538,11 @@ export default function WalletPage() {
                     </p>
                     {/* PATCH_80: Only show balance after if transaction is complete */}
                     {tx.status === "success" || !tx.status ? (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400">
                         Bal: ${(tx.balanceAfter || 0).toFixed(2)}
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400">
                         {tx.status === "failed"
                           ? "Not applied"
                           : "Processing..."}

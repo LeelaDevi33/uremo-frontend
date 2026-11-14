@@ -186,7 +186,7 @@ export default function AdminAffiliatesPage() {
 
   return (
     <div className="u-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Affiliate Program</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -199,7 +199,7 @@ export default function AdminAffiliatesPage() {
       </div>
 
       {/* PATCH_56: Page-level Tab Bar */}
-      <div className="flex items-center gap-1 p-1 bg-white/5 rounded-xl border border-white/10 mb-6">
+      <div className="mb-6 flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
         {[
           { key: "overview", label: "Overview", icon: "👥" },
           { key: "commissions", label: "Commissions", icon: "💰" },
@@ -209,6 +209,7 @@ export default function AdminAffiliatesPage() {
           return (
             <button
               key={t.key}
+              aria-pressed={active}
               onClick={() => setPageTab(t.key as typeof pageTab)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
                 active
@@ -264,20 +265,22 @@ export default function AdminAffiliatesPage() {
 
           {/* Filters */}
           <div className="mb-6 flex flex-wrap gap-4">
-            <div className="flex gap-2">
+            <div className="flex w-full min-w-0 gap-2 sm:w-auto">
               <input
                 type="text"
+                aria-label="Search affiliates by name, email or referral code"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 placeholder="Search by name, email, or code..."
-                className="u-input w-64"
+                className="u-input min-w-0 flex-1 sm:w-64"
               />
               <button onClick={handleSearch} className="btn-secondary text-sm">
                 Search
               </button>
             </div>
             <select
+              aria-label="Filter affiliates by activity"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
@@ -311,7 +314,7 @@ export default function AdminAffiliatesPage() {
                 Affiliates are users who refer others to your platform and earn
                 commission.
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 Users can apply for affiliate status from their dashboard.
                 Approved affiliates appear here.
               </p>
@@ -354,7 +357,7 @@ export default function AdminAffiliatesPage() {
                         <p className="text-white font-medium">
                           {aff.name || "Unknown"}
                         </p>
-                        <p className="text-xs text-slate-500">{aff.email}</p>
+                        <p className="text-xs text-slate-400">{aff.email}</p>
                       </td>
                       <td className="py-3 px-4">
                         <span className="font-mono text-sm text-purple-300">
@@ -476,7 +479,7 @@ export default function AdminAffiliatesPage() {
             ) : selectedAffiliate ? (
               <>
                 <div className="flex justify-between items-start mb-6">
-                  <div>
+                  <div className="min-w-0 break-words">
                     <h2 className="text-2xl font-bold text-white">
                       {selectedAffiliate.name || "Unknown"}
                     </h2>
@@ -484,6 +487,7 @@ export default function AdminAffiliatesPage() {
                   </div>
                   <button
                     onClick={() => setSelectedAffiliate(null)}
+                    aria-label="Close affiliate details"
                     className="text-slate-400 hover:text-white text-2xl"
                   >
                     ×
@@ -491,7 +495,7 @@ export default function AdminAffiliatesPage() {
                 </div>
 
                 {/* Detail Tabs */}
-                <div className="flex gap-2 mb-6 border-b border-white/10 pb-2 overflow-x-auto">
+                <div className="mb-6 flex flex-wrap gap-2 border-b border-white/10 pb-2">
                   {(
                     [
                       "profile",
@@ -502,6 +506,7 @@ export default function AdminAffiliatesPage() {
                   ).map((tab) => (
                     <button
                       key={tab}
+                      aria-pressed={detailTab === tab}
                       onClick={() => setDetailTab(tab)}
                       className={`text-sm px-4 py-2 rounded-t whitespace-nowrap ${
                         detailTab === tab
@@ -632,7 +637,7 @@ export default function AdminAffiliatesPage() {
                                   <p className="text-white">
                                     {c.referredUserName}
                                   </p>
-                                  <p className="text-xs text-slate-500">
+                                  <p className="text-xs text-slate-400">
                                     {c.referredUserEmail}
                                   </p>
                                 </td>
@@ -688,11 +693,11 @@ export default function AdminAffiliatesPage() {
                                 <p className="text-xs text-slate-400">
                                   {wd.paymentDetails}
                                 </p>
-                                <p className="text-xs text-slate-500 mt-1">
+                                <p className="text-xs text-slate-400 mt-1">
                                   {formatDate(wd.createdAt)}
                                 </p>
                                 {wd.adminNotes && (
-                                  <p className="text-xs text-slate-500 mt-1 italic">
+                                  <p className="text-xs text-slate-400 mt-1 italic">
                                     {wd.adminNotes}
                                   </p>
                                 )}
@@ -743,7 +748,7 @@ export default function AdminAffiliatesPage() {
                                 <td className="py-2 px-3 text-slate-400">
                                   {u.email}
                                 </td>
-                                <td className="py-2 px-3 text-slate-500">
+                                <td className="py-2 px-3 text-slate-400">
                                   {formatDate(u.createdAt)}
                                 </td>
                               </tr>

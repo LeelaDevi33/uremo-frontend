@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { publicSupportEmail } from "@/lib/supportEmail";
 
 export type FaqItem = { q: string; a: string };
 export type TitleDesc = { title: string; desc: string };
@@ -816,7 +817,7 @@ const mergeWithDefaults = (input: any): PublicSiteSettings => {
   const brandName = String(input?.site?.brandName || "").trim();
   const bannerText = String(input?.site?.bannerText || input?.bannerText || "").trim();
 
-  const supportEmail = String(input?.support?.supportEmail || "").trim();
+  const supportEmail = publicSupportEmail(input?.support?.supportEmail, input?.support?.emailVisible);
   const whatsappNumber = String(input?.support?.whatsappNumber || "").trim();
   const disclaimer = String(input?.footer?.disclaimer || "").trim();
   const dataSafetyNote = String(input?.footer?.dataSafetyNote || "").trim();
@@ -1183,8 +1184,7 @@ const mergeWithDefaults = (input: any): PublicSiteSettings => {
     support: {
       whatsappNumber:
         whatsappNumber || DEFAULT_PUBLIC_SITE_SETTINGS.support.whatsappNumber,
-      supportEmail:
-        supportEmail || DEFAULT_PUBLIC_SITE_SETTINGS.support.supportEmail,
+      supportEmail,
     },
     footer: {
       disclaimer: disclaimer || DEFAULT_PUBLIC_SITE_SETTINGS.footer.disclaimer,

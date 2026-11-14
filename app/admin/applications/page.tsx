@@ -40,11 +40,11 @@ interface FilterOptions {
 const statusColor = (status: string) => {
   switch (status) {
     case "pending":
-      return "bg-yellow-600";
+      return "bg-yellow-800";
     case "approved":
-      return "bg-green-600";
+      return "bg-green-800";
     case "rejected":
-      return "bg-red-600";
+      return "bg-red-800";
     default:
       return "bg-gray-600";
   }
@@ -150,12 +150,14 @@ export default function AdminApplicationsPage() {
       <div className="flex flex-wrap gap-3 items-center">
         <input
           type="text"
+          aria-label="Search applications by email"
           placeholder="Search by email..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="u-input w-64"
         />
         <select
+          aria-label="Filter applications by status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -171,6 +173,7 @@ export default function AdminApplicationsPage() {
           ))}
         </select>
         <select
+          aria-label="Filter applications by category"
           value={categoryFilter}
           onChange={(e) => {
             setCategoryFilter(e.target.value);
@@ -290,7 +293,7 @@ export default function AdminApplicationsPage() {
                             <button
                               onClick={() => updateStatus(app._id, "approved")}
                               disabled={updating === app._id}
-                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                              className="px-2 py-1 bg-green-800 text-white text-xs rounded hover:bg-green-900 disabled:opacity-50"
                               title="Approve Application"
                             >
                               {updating === app._id ? "..." : "✓ Approve"}
@@ -300,7 +303,7 @@ export default function AdminApplicationsPage() {
                             <button
                               onClick={() => updateStatus(app._id, "rejected")}
                               disabled={updating === app._id}
-                              className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+                              className="px-2 py-1 bg-red-800 text-white text-xs rounded hover:bg-red-900 disabled:opacity-50"
                               title="Reject Application"
                             >
                               {updating === app._id ? "..." : "✕ Reject"}

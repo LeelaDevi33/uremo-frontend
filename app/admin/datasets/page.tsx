@@ -319,7 +319,7 @@ function DatasetsContent() {
       ) : datasets.length === 0 ? (
         <div className="text-center py-12">
           <p className="text-gray-400">No datasets yet</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-400 mt-1">
             Create your first RLHF dataset to get started
           </p>
         </div>
@@ -330,9 +330,9 @@ function DatasetsContent() {
               key={ds._id}
               className="bg-[#1e1e2e] border border-[#2a2a3a] rounded-xl p-5 hover:border-[#3a3a4a] transition"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+              <div className="flex min-w-0 flex-col items-start justify-between gap-3 sm:flex-row">
+                <div className="min-w-0 flex-1 break-words">
+                  <div className="mb-2 flex flex-wrap items-center gap-3">
                     <Link
                       href={`/admin/datasets/${ds._id}`}
                       className="text-lg font-semibold text-white hover:text-blue-400 transition"
@@ -359,7 +359,7 @@ function DatasetsContent() {
                       {ds.description}
                     </p>
                   )}
-                  <div className="flex gap-4 text-xs text-gray-500">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
                     <span>{ds.taskCount || 0} tasks</span>
                     <span>{ds.submissionCount || 0} submissions</span>
                     <span>{ds.difficultyLevel}</span>
@@ -368,10 +368,10 @@ function DatasetsContent() {
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4">
+                <div className="flex flex-wrap gap-2">
                   <Link
                     href={`/admin/datasets/${ds._id}`}
-                    className="px-3 py-1.5 text-xs bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition"
+                    className="px-3 py-1.5 text-xs bg-blue-950 text-blue-200 hover:bg-blue-900 rounded-lg transition"
                   >
                     Edit & Tasks
                   </Link>
@@ -379,15 +379,15 @@ function DatasetsContent() {
                     onClick={() => handleToggleActive(ds)}
                     className={`px-3 py-1.5 text-xs rounded-lg transition ${
                       ds.isActive
-                        ? "bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30"
-                        : "bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                        ? "bg-amber-950 text-amber-200 hover:bg-amber-900"
+                        : "bg-green-950 text-green-200 hover:bg-green-900"
                     }`}
                   >
                     {ds.isActive ? "Deactivate" : "Activate"}
                   </button>
                   <button
                     onClick={() => setDeleteTarget(ds)}
-                    className="px-3 py-1.5 text-xs bg-red-600/20 text-red-400 hover:bg-red-600/30 rounded-lg transition"
+                    className="px-3 py-1.5 text-xs bg-red-950 text-red-200 hover:bg-red-900 rounded-lg transition"
                   >
                     Delete
                   </button>

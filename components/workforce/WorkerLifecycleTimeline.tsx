@@ -317,7 +317,8 @@ export function WorkerLifecycleTimeline({
 
   // Horizontal layout (default)
   return (
-    <div className="overflow-x-auto">
+    <div role="region" aria-label="Worker lifecycle timeline" tabIndex={0}
+      className="overflow-x-auto rounded focus-visible:outline-2 focus-visible:outline-cyan-400">
       <div className="flex items-center justify-between min-w-[800px] px-2">
         {LIFECYCLE_STEPS.map((step, index) => {
           const state = getStepState(step);
