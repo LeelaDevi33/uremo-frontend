@@ -173,6 +173,22 @@ export default function AdminOpportunitiesPage() {
       setBusy(false);
     }
   }
+  async function openLumiereSample() {
+    if (writing.current) return;
+    writing.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const { id } = await apiRequest<{ id: string }>(endpoint + "/samples/lumiere", "POST", null, true);
+      refresh();
+      await openListing(id);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      writing.current = false;
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("edit");
     if (id && /^[a-f\d]{24}$/i.test(id)) void openListing(id);
@@ -299,19 +315,23 @@ export default function AdminOpportunitiesPage() {
           </h1>
         </div>
         {!edit && (
-          <button
-            type="button"
-            className={primary}
-            disabled={busy || loading || !!loadError}
-            onClick={() => {
-              setNotice("");
-              setError("");
-              setConflict(false);
-              setEdit({ draft: toDraft() });
-            }}
-          >
-            New project offer
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={secondary} disabled={busy || loading || !!loadError}
+              onClick={() => void openLumiereSample()}>Open Lumiere sample</button>
+            <button
+              type="button"
+              className={primary}
+              disabled={busy || loading || !!loadError}
+              onClick={() => {
+                setNotice("");
+                setError("");
+                setConflict(false);
+                setEdit({ draft: toDraft() });
+              }}
+            >
+              New project offer
+            </button>
+          </div>
         )}
       </header>
       {notice && (

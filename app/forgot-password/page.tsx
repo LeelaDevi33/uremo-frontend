@@ -20,6 +20,7 @@ export default function ForgotPassword() {
   };
 
   const submit = async () => {
+    if (loading) return;
     setError("");
 
     if (!email.trim()) {
@@ -41,30 +42,15 @@ export default function ForgotPassword() {
       setSubmitted(true);
       toast("Check your email for reset instructions", "success");
     } catch (err: any) {
-      const message = err.message || "Failed to send reset email";
       const code = err.payload?.code;
 
       if (code === "RATE_LIMITED") {
         toast("Too many attempts. Please try again later.", "error");
-      } else if (message.includes("timeout") || message.includes("network")) {
-        toast(
-          "Connection error. Please check your internet and try again.",
-          "error",
-        );
       } else {
-        // Show success even on error to prevent email enumeration
-        setSubmitted(true);
-        toast("Check your email for reset instructions", "success");
+        setError("The reset request could not be submitted. Please try again.");
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  // PATCH_54: Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      submit();
     }
   };
 
@@ -97,7 +83,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
+      <form noValidate onSubmit={event => { event.preventDefault(); void submit(); }} className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
         <h1 className="text-xl font-semibold mb-2 text-white">
           Forgot Password
         </h1>
@@ -107,7 +93,11 @@ export default function ForgotPassword() {
         </p>
 
         <div className="mb-4">
+          <label htmlFor="recovery-email" className="mb-1 block text-sm">Email address</label>
           <input
+            id="recovery-email"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "recovery-error" : undefined}
             className={`w-full border p-2 rounded bg-slate-700 text-white placeholder-slate-400 ${
               error ? "border-red-500" : "border-slate-600"
             }`}
@@ -118,15 +108,14 @@ export default function ForgotPassword() {
               setEmail(e.target.value);
               if (error) setError("");
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="email"
           />
-          {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+          {error && <p role="alert" id="recovery-error" className="text-red-400 text-xs mt-1">{error}</p>}
         </div>
 
         <button
-          onClick={submit}
+          type="submit"
           disabled={loading}
           className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -139,7 +128,7 @@ export default function ForgotPassword() {
             Login
           </a>
         </p>
-      </div>
+      </form>
     </div>
   );
 }
