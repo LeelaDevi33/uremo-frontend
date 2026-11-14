@@ -459,6 +459,7 @@ export default function AdminScreeningEditorPage() {
             <label className="text-xs text-slate-400 mb-1 block">Title</label>
             <input
               type="text"
+              aria-label="Screening title"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               className="input w-full"
@@ -469,6 +470,7 @@ export default function AdminScreeningEditorPage() {
               Category
             </label>
             <select
+              aria-label="Screening category"
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
               className="input w-full"
@@ -486,6 +488,7 @@ export default function AdminScreeningEditorPage() {
               Description
             </label>
             <textarea
+              aria-label="Screening description"
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
@@ -500,6 +503,7 @@ export default function AdminScreeningEditorPage() {
             <input
               type="number"
               min={1}
+              aria-label="Time limit in minutes"
               value={form.timeLimit}
               onChange={(e) =>
                 setForm({ ...form, timeLimit: Number(e.target.value) })
@@ -515,6 +519,7 @@ export default function AdminScreeningEditorPage() {
               type="number"
               min={1}
               max={100}
+              aria-label="Passing score percent"
               value={form.passingScore}
               onChange={(e) =>
                 setForm({ ...form, passingScore: Number(e.target.value) })
@@ -548,6 +553,7 @@ export default function AdminScreeningEditorPage() {
                   Evaluation Mode
                 </label>
                 <select
+                  aria-label="Evaluation mode"
                   value={form.evaluationMode}
                   onChange={(e) =>
                     setForm({
@@ -577,6 +583,7 @@ export default function AdminScreeningEditorPage() {
                   type="number"
                   min={1}
                   max={100}
+                  aria-label="Pass threshold percent"
                   value={form.passThreshold}
                   onChange={(e) =>
                     setForm({
@@ -603,6 +610,7 @@ export default function AdminScreeningEditorPage() {
                     <input
                       type="number"
                       min={0}
+                      aria-label="Minimum response length in words"
                       value={form.autoValidationRules.minWords}
                       onChange={(e) =>
                         setForm({
@@ -624,6 +632,7 @@ export default function AdminScreeningEditorPage() {
                     <input
                       type="number"
                       min={0}
+                      aria-label="Maximum response length in words"
                       value={form.autoValidationRules.maxWords}
                       onChange={(e) =>
                         setForm({
@@ -644,6 +653,7 @@ export default function AdminScreeningEditorPage() {
                     </label>
                     <input
                       type="text"
+                      aria-label="Banned words"
                       value={form.autoValidationRules.bannedWords}
                       onChange={(e) =>
                         setForm({
@@ -714,6 +724,7 @@ export default function AdminScreeningEditorPage() {
                     <div key={idx} className="flex items-center gap-2">
                       <input
                         type="text"
+                        aria-label={`Rubric criterion ${idx + 1}`}
                         value={r.criteria}
                         onChange={(e) => {
                           const updated = [...form.rubric];
@@ -729,6 +740,7 @@ export default function AdminScreeningEditorPage() {
                       <input
                         type="number"
                         min={1}
+                        aria-label={`Criterion weight ${idx + 1}`}
                         value={r.weight}
                         onChange={(e) => {
                           const updated = [...form.rubric];
@@ -745,6 +757,7 @@ export default function AdminScreeningEditorPage() {
                       <input
                         type="number"
                         min={1}
+                        aria-label={`Criterion maximum score ${idx + 1}`}
                         value={r.maxScore}
                         onChange={(e) => {
                           const updated = [...form.rubric];
@@ -801,6 +814,7 @@ export default function AdminScreeningEditorPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
                   <input
                     type="text"
+                    aria-label={`Question ${qIndex + 1}, question text`}
                     value={q.question}
                     onChange={(e) =>
                       updateQuestion(qIndex, "question", e.target.value)
@@ -809,6 +823,7 @@ export default function AdminScreeningEditorPage() {
                     placeholder="Enter question..."
                   />
                   <select
+                    aria-label={`Question ${qIndex + 1}, question type`}
                     value={q.type}
                     onChange={(e) => {
                       const nextType = e.target.value as FormQuestion["type"];
@@ -850,6 +865,7 @@ export default function AdminScreeningEditorPage() {
                           {q.type === "single" ? (
                             <input
                               type="radio"
+                              aria-label={`Mark option ${oIndex + 1} correct for question ${qIndex + 1}`}
                               name={`correct-${qIndex}`}
                               checked={q.correctAnswerIndexes.includes(oIndex)}
                               onChange={() =>
@@ -869,6 +885,7 @@ export default function AdminScreeningEditorPage() {
                           )}
                           <input
                             type="text"
+                            aria-label={`Question ${qIndex + 1}, option ${oIndex + 1}`}
                             value={opt}
                             onChange={(e) =>
                               updateOption(qIndex, oIndex, e.target.value)
@@ -899,6 +916,7 @@ export default function AdminScreeningEditorPage() {
                           Response A
                         </label>
                         <textarea
+                          aria-label={`Question ${qIndex + 1}, response a`}
                           value={q.responseA || ""}
                           onChange={(e) =>
                             updateQuestion(qIndex, "responseA", e.target.value)
@@ -912,6 +930,7 @@ export default function AdminScreeningEditorPage() {
                           Response B
                         </label>
                         <textarea
+                          aria-label={`Question ${qIndex + 1}, response b`}
                           value={q.responseB || ""}
                           onChange={(e) =>
                             updateQuestion(qIndex, "responseB", e.target.value)
@@ -935,6 +954,7 @@ export default function AdminScreeningEditorPage() {
                       <input
                         type="number"
                         min="0"
+                        aria-label={`Question ${qIndex + 1}, minimum words`}
                         value={q.minWords || 0}
                         onChange={(e) =>
                           updateQuestion(
@@ -958,6 +978,7 @@ export default function AdminScreeningEditorPage() {
                         Language
                       </label>
                       <select
+                        aria-label={`Question ${qIndex + 1}, code language`}
                         value={q.codeLanguage || "javascript"}
                         onChange={(e) =>
                           updateQuestion(qIndex, "codeLanguage", e.target.value)
@@ -985,6 +1006,7 @@ export default function AdminScreeningEditorPage() {
                       </label>
                       <input
                         type="url"
+                        aria-label={`Question ${qIndex + 1}, image url`}
                         value={q.imageUrl || ""}
                         onChange={(e) =>
                           updateQuestion(qIndex, "imageUrl", e.target.value)

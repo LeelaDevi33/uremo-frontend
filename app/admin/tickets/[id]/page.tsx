@@ -484,6 +484,7 @@ export default function AdminTicketViewPage() {
                     Change status
                   </summary>
                   <select
+                    aria-label="Ticket status"
                     value={ticket.status}
                     onChange={(e) => updateStatus(e.target.value)}
                     disabled={updatingStatus}
@@ -498,6 +499,7 @@ export default function AdminTicketViewPage() {
               </>
             )}
             <select
+                    aria-label="Assigned administrator"
               value={ticket.assignedAdmin?._id || ""}
               onChange={(e) => assignTicket(e.target.value)}
               disabled={assigningAdmin}
