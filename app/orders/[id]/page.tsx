@@ -217,14 +217,14 @@ function OrderDetailsContent() {
       setOrder(data);
     } catch (err) {
       const apiErr = err as ApiError;
-      if (apiErr?.status === 401 || apiErr?.status === 403) {
+      if (apiErr?.status === 401) {
         router.replace(
           `/login?next=${encodeURIComponent(`/orders/${orderId}`)}`,
         );
         return;
       }
 
-      if (apiErr?.status === 404) {
+      if (apiErr?.status === 403 || apiErr?.status === 404) {
         setOrder(null);
         setNotFound(true);
         return;
