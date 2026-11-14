@@ -13,6 +13,8 @@ const date = (value: string) => new Date(value).toLocaleString();
 
 export default function OpportunityReceipts({ onRefund }: { onRefund: () => void }) {
   const [type, setType] = useState("");
+  const [inputId, setInputId] = useState("");
+  const [receiptId, setReceiptId] = useState("");
   const [cursors, setCursors] = useState<string[]>([]);
   const [version, setVersion] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
@@ -42,13 +44,25 @@ export default function OpportunityReceipts({ onRefund }: { onRefund: () => void
     const query = new URLSearchParams();
     if (type) query.set("type", type);
     if (before) query.set("before", before);
+    if (receiptId) query.set("receiptId", receiptId);
     setResult(null);
     setError("");
     apiRequest<Result>(`/api/admin/marketplace-receipts?${query}`, "GET", null, true)
       .then(value => { if (current) setResult(value); })
       .catch(() => { if (current) setError("Receipts could not be loaded."); });
     return () => { current = false; };
-  }, [type, before, version]);
+  }, [type, before, receiptId, version]);
+
+  function findReceipt(id: string) {
+    setInputId(id);
+    setReceiptId(id);
+    setCursors([]);
+    setReview("");
+    setReason("");
+    setNotice("");
+    if (id) setType("");
+    setVersion(value => value + 1);
+  }
 
   return <section aria-labelledby="receipt-heading" className="mt-8 rounded-xl border border-slate-700 p-5 text-slate-200">
     <div className="flex flex-wrap items-center gap-4">
@@ -59,11 +73,24 @@ export default function OpportunityReceipts({ onRefund }: { onRefund: () => void
       </select>
       <button type="button" className="underline" onClick={() => { setCursors([]); setVersion(v => v + 1); }}>Refresh receipts</button>
     </div>
+    <form className="mt-4 flex flex-wrap items-end gap-3" onSubmit={event => {
+      event.preventDefault(); findReceipt(inputId.trim());
+    }}>
+      <label className="flex min-w-0 flex-col gap-1">Find by receipt ID
+        <input className="max-w-full rounded border border-slate-600 bg-slate-900 px-3 py-2 font-mono"
+          pattern="[0-9a-fA-F]{24}" title="Enter the 24-character receipt ID from My project access"
+          value={inputId} onChange={event => setInputId(event.target.value.trim())}
+          type="search" spellCheck={false} autoComplete="off" disabled={saving} />
+      </label>
+      <button type="submit" disabled={saving} className="rounded border border-slate-600 px-3 py-2">Find receipt</button>
+      {receiptId && <button type="button" disabled={saving} className="underline" onClick={() => findReceipt("")}>Show all receipts</button>}
+    </form>
     {error ? <p role="alert" className="mt-4">{error}</p> : !result ? <p role="status" className="mt-4">Loading receipts…</p> :
       !result.receipts.length ? <p className="mt-4">No matching receipts.</p> :
       <ul className="mt-4 divide-y divide-slate-700">{result.receipts.map(row =>
         <li key={row._id} className="flex flex-wrap items-start justify-between gap-3 py-3">
           <div><strong>{row.title}</strong><p>{row.holder} · {row.type === "buy" ? "Exclusive purchase" : "Rental"}</p>
+            <p className="break-all text-sm text-slate-300">Receipt ID <code className="select-all">{row._id}</code></p>
             {row.refundedAt ? <p>Refunded {date(row.refundedAt)} · {row.refundReason}</p> :
               review !== row._id && <button type="button" disabled={saving} className="mt-1 underline" onClick={() => { setReview(row._id); setReason(""); setNotice(""); }}>Review refund</button>}
           </div>

@@ -36,6 +36,7 @@ function GrantCard({ grant, token, initialOpen }: { grant: AccessGrant; token: s
 
     {grant.projectScope && <details><summary>Project scope at checkout</summary><p className={styles.longText}>{grant.projectScope}</p></details>}
     <dl className={styles.receipt}>
+      <div><dt>Receipt ID</dt><dd className="break-all font-mono select-all">{grant._id}</dd></div>
       <div><dt>Paid</dt><dd>{formatPrice(grant.amount, grant.currency)}</dd></div>
       <div><dt>{rented ? "Starts" : "Purchased"}</dt><dd>{grantDate(grant.startsAt)}</dd></div>
       {!grant.refundedAt && <div><dt>{rented ? "Ends" : "Access term"}</dt><dd>{rented ? grantDate(grant.endsAt) : "Permanent"}</dd></div>}
