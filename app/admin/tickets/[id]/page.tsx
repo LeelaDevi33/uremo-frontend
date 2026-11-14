@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 
@@ -397,12 +396,7 @@ export default function AdminTicketViewPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="u-container max-w-4xl py-8"
-    >
+    <div className="u-container max-w-4xl py-8">
       <div className="mb-6">
         <Link
           href="/admin/tickets"
@@ -716,6 +710,6 @@ export default function AdminTicketViewPage() {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

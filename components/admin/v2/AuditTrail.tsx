@@ -43,7 +43,7 @@ export default function AuditTrail({
         <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
           <span>Log</span> {title}
         </h3>
-        <div className="flex items-center justify-center py-6 text-slate-500 text-sm">
+        <div className="flex items-center justify-center py-6 text-slate-400 text-sm">
           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2" />
           Loading history...
         </div>
@@ -57,7 +57,7 @@ export default function AuditTrail({
         <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
           <span>Log</span> {title}
         </h3>
-        <p className="text-slate-500 text-sm py-4 text-center">
+        <p className="text-slate-400 text-sm py-4 text-center">
           No activity recorded yet
         </p>
       </div>
@@ -68,7 +68,7 @@ export default function AuditTrail({
     <div className="bg-[#0a0d14] border border-white/5 rounded-xl p-4">
       <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
         <span>Log</span> {title}
-        <span className="ml-auto text-xs text-slate-500">
+        <span className="ml-auto text-xs text-slate-400">
           {events.length} event{events.length !== 1 ? "s" : ""}
         </span>
       </h3>
@@ -161,11 +161,11 @@ function AuditEventRow({
             <span className="text-sm text-white font-medium truncate">
               {event.action}
             </span>
-            <span className="text-xs text-slate-500 flex-shrink-0">
+            <span className="text-xs text-slate-400 flex-shrink-0">
               {formatTime(event.timestamp)}
             </span>
           </div>
-          <div className="text-xs text-slate-500 truncate">
+          <div className="text-xs text-slate-400 truncate">
             by {event.actor}
           </div>
         </div>
@@ -187,7 +187,7 @@ function AuditEventRow({
               {event.oldValue && (
                 <div>
                   <span className="text-red-400">Before:</span>
-                  <pre className="mt-1 text-slate-500 overflow-auto">
+                  <pre className="mt-1 text-slate-400 overflow-auto">
                     {typeof event.oldValue === "object"
                       ? JSON.stringify(event.oldValue, null, 2)
                       : String(event.oldValue)}
@@ -197,7 +197,7 @@ function AuditEventRow({
               {event.newValue && (
                 <div>
                   <span className="text-emerald-400">After:</span>
-                  <pre className="mt-1 text-slate-500 overflow-auto">
+                  <pre className="mt-1 text-slate-400 overflow-auto">
                     {typeof event.newValue === "object"
                       ? JSON.stringify(event.newValue, null, 2)
                       : String(event.newValue)}

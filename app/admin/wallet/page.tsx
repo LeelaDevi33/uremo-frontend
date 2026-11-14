@@ -616,7 +616,7 @@ export default function AdminWalletPage() {
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
                     withdrawalFilter === status
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-800 text-white"
                       : "bg-slate-800 text-slate-400 hover:bg-slate-700"
                   }`}
                 >
@@ -790,11 +790,11 @@ export default function AdminWalletPage() {
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                       balanceFilter === tier.key
                         ? tier.key === "high"
-                          ? "bg-emerald-600 text-white"
+                          ? "bg-emerald-800 text-white"
                           : tier.key === "medium"
-                            ? "bg-blue-600 text-white"
+                            ? "bg-blue-800 text-white"
                             : tier.key === "low"
-                              ? "bg-yellow-600 text-white"
+                              ? "bg-yellow-800 text-white"
                               : "bg-slate-600 text-white"
                         : "bg-slate-800 text-slate-300 hover:bg-slate-700"
                     }`}
