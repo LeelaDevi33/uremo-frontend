@@ -38,9 +38,6 @@ export default function Navbar() {
 
   const nav = settings?.nav || DEFAULT_PUBLIC_SITE_SETTINGS.nav;
   const site = settings?.site || DEFAULT_PUBLIC_SITE_SETTINGS.site;
-  const supportEmail =
-    settings?.support?.supportEmail ||
-    DEFAULT_PUBLIC_SITE_SETTINGS.support.supportEmail;
 
   // Close mobile menu on route change
   useEffect(() => {

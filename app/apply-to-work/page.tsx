@@ -89,6 +89,7 @@ function FilterIcon({ className }: { className?: string }) {
 
 interface Application {
   _id: string;
+  roleArchived?: boolean;
   status: "pending" | "approved" | "rejected";
   positionTitle?: string;
   position?: string | { _id: string } | null;
@@ -360,7 +361,7 @@ function ApplicationForm({ query }: { query: string }) {
             </div>
 
             <div className="p-6 space-y-4">
-              <p className="text-slate-300">{ui.existingBody}</p>
+              <p className="text-slate-300">{existing.roleArchived ? "This role has been archived. Your application remains in your workspace history." : ui.existingBody}</p>
 
               {existing.positionTitle && (
                 <div className="flex items-center gap-3 p-4 rounded-xl bg-white/5 border border-white/10">
@@ -376,7 +377,8 @@ function ApplicationForm({ query }: { query: string }) {
                 </div>
               )}
 
-              {existing.status === "pending" && (
+              {existing.roleArchived && <Link className="btn-secondary inline-block" href="/workspace">View workspace history</Link>}
+              {!existing.roleArchived && existing.status === "pending" && (
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
                   <span className="text-xl">⏳</span>
                   <p className="text-sm text-yellow-200">
@@ -385,7 +387,7 @@ function ApplicationForm({ query }: { query: string }) {
                 </div>
               )}
 
-              {existing.status === "approved" && (
+              {!existing.roleArchived && existing.status === "approved" && (
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
                   <CheckCircleIcon className="w-5 h-5 text-green-400 mt-0.5" />
                   <div>
@@ -402,7 +404,7 @@ function ApplicationForm({ query }: { query: string }) {
                 </div>
               )}
 
-              {existing.status === "rejected" && (
+              {!existing.roleArchived && existing.status === "rejected" && (
                 <div className="flex items-start gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
                   <span className="text-xl">❌</span>
                   <p className="text-sm text-red-200">

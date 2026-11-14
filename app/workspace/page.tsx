@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { apiRequest } from "@/lib/api";
-import { screeningOutcome, screeningProgress, type ScreeningAttempt } from "@/lib/workspaceScreening";
+import { hasActiveScreening, screeningOutcome, screeningProgress, type ScreeningAttempt } from "@/lib/workspaceScreening";
 import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/hooks/useToast";
 import { EmojiWorkspace } from "@/components/ui/Emoji";
@@ -55,6 +55,7 @@ type Project = {
 
 type JobApplication = {
   _id: string;
+  roleArchived?: boolean;
   position: Position;
   positionTitle: string;
   category: string;
@@ -81,7 +82,7 @@ type JobApplication = {
   requiredScreenings?: Screening[];
   trainingMaterials: TrainingMaterial[];
   assignedProjects: Project[];
-  completedProjects: Project[];
+  completedProjects: { _id: string; title: string; earningsCredited?: number; earnings?: number }[];
   screeningsCompleted: ScreeningAttempt[];
   adminMessage?: string;
   createdAt: string;
@@ -249,19 +250,12 @@ const TABS: { key: WorkspaceTab; label: string; icon: string }[] = [
 // PATCH_49: Smart default tab determination
 function determineDefaultTab(applications: JobApplication[]): WorkspaceTab {
   // Priority 1: Any job in screening state
-  const hasScreeningState = applications.some(
-    (app) =>
-      app.workerStatus === "screening_unlocked" ||
-      app.workerStatus === "screening_available" ||
-      app.workerStatus === "test_submitted" ||
-      app.workerStatus === "training_viewed" ||
-      app.workerStatus === "failed",
-  );
+  const hasScreeningState = applications.some(hasActiveScreening);
   if (hasScreeningState) return "screenings";
 
   // Priority 2: Any job with active project
   const hasActiveProject = applications.some(
-    (app) => app.workerStatus === "assigned" || app.workerStatus === "working",
+    (app) => app.assignedProjects?.length || app.workerStatus === "assigned" || app.workerStatus === "working",
   );
   if (hasActiveProject) return "projects";
 
@@ -408,7 +402,7 @@ function JobCard({
           <div
             className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border ${status.color}`}
           >
-            {status.humanMessage}
+            {app.roleArchived ? "Archived role" : status.humanMessage}
           </div>
         </div>
       </div>
@@ -427,7 +421,7 @@ function JobCard({
           </p>
           <p className="text-xs text-slate-400">Pending</p>
         </div>
-        {(app.workerStatus === "failed" ||
+        {!app.roleArchived && (app.workerStatus === "failed" ||
           app.workerStatus === "screening_unlocked" ||
           app.workerStatus === "training_viewed") && (
           <div className="flex-1 min-w-[80px]">
@@ -440,7 +434,7 @@ function JobCard({
       </div>
 
       {/* Progress Tracker */}
-      <div className="mb-4 px-2">
+      {!app.roleArchived && <div className="mb-4 px-2">
         <div className="flex items-center justify-between overflow-x-auto pb-2">
           {JOURNEY_STEPS.map((step, idx) => {
             const stepConfig = STATUS_CONFIG[step];
@@ -479,8 +473,7 @@ function JobCard({
             );
           })}
         </div>
-      </div>
-
+      </div>}
       {/* Admin Message */}
       {app.adminMessage && (
         <div className="mb-4 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
@@ -493,6 +486,7 @@ function JobCard({
 
       {/* Dynamic Action Area */}
       <div className="border-t border-white/10 pt-4">
+        {app.roleArchived ? <p className="text-sm text-slate-400">This role has closed. Your application, assignments and earnings remain in your workspace.</p> : <>
         {/* Training Materials Section - Show when screening_unlocked */}
         {unlocked &&
           !trainingViewed &&
@@ -685,9 +679,9 @@ function JobCard({
             </div>
           )}
 
+        </>}
         {/* Active Projects */}
-        {(app.workerStatus === "assigned" || app.workerStatus === "working") &&
-          app.assignedProjects.length > 0 && (
+        {app.assignedProjects.length > 0 && (
             <div className="mt-4 pt-4 border-t border-white/10">
               <h4 className="font-medium mb-3 text-sm">Active Projects</h4>
               <div className="space-y-2">
@@ -737,13 +731,15 @@ function ApplicationsTab({
   applications: JobApplication[];
   onRefresh: () => void;
 }) {
-  const pendingApps = applications.filter(
+  const archivedApps = applications.filter(app => app.roleArchived);
+  const openApps = applications.filter(app => !app.roleArchived);
+  const pendingApps = openApps.filter(
     (a) => a.applicationStatus === "pending",
   );
-  const approvedApps = applications.filter(
+  const approvedApps = openApps.filter(
     (a) => a.applicationStatus === "approved",
   );
-  const rejectedApps = applications.filter(
+  const rejectedApps = openApps.filter(
     (a) => a.applicationStatus === "rejected",
   );
 
@@ -799,6 +795,10 @@ function ApplicationsTab({
         </div>
       )}
 
+      {archivedApps.length > 0 && <section>
+        <h3 className="mb-3 text-lg font-semibold">Application history ({archivedApps.length})</h3>
+        <div className="space-y-4">{archivedApps.map(app => <JobCard key={app._id} app={app} />)}</div>
+      </section>}
       {applications.length === 0 && (
         <EmptyState
           icon="List"
@@ -823,14 +823,7 @@ function ScreeningsTab({
   onRefresh: () => void;
 }) {
   // Filter applications that are in screening-related states
-  const screeningApps = applications.filter(
-    (a) =>
-      a.workerStatus === "screening_unlocked" ||
-      a.workerStatus === "screening_available" ||
-      a.workerStatus === "training_viewed" ||
-      a.workerStatus === "test_submitted" ||
-      a.workerStatus === "failed",
-  );
+  const screeningApps = applications.filter(hasActiveScreening);
 
   const allCompletedScreenings = applications.flatMap(app => {
     const { required } = screeningProgress(app);
@@ -1019,16 +1012,12 @@ function ScreeningsTab({
 
 // PATCH_49: Projects Tab Content
 function ProjectsTab({ applications }: { applications: JobApplication[] }) {
-  // Filter applications with active projects
-  const workingApps = applications.filter(
-    (a) => a.workerStatus === "assigned" || a.workerStatus === "working",
-  );
   const readyApps = applications.filter(
-    (a) => a.workerStatus === "ready_to_work",
+    (a) => !a.roleArchived && a.workerStatus === "ready_to_work",
   );
 
   // Collect all assigned projects
-  const allProjects = workingApps.flatMap((a) => a.assignedProjects);
+  const allProjects = applications.flatMap((a) => a.assignedProjects);
   const allCompleted = applications.flatMap((a) => a.completedProjects);
 
   return (
@@ -1113,7 +1102,7 @@ function ProjectsTab({ applications }: { applications: JobApplication[] }) {
             {allCompleted.length})
           </h3>
           <div className="grid gap-3 md:grid-cols-2">
-            {allCompleted.slice(0, 6).map((project: any, idx) => (
+            {allCompleted.slice(0, 6).map((project, idx) => (
               <div
                 key={project._id || idx}
                 className="p-3 rounded-xl border border-green-500/20 bg-green-500/5"
@@ -1122,7 +1111,7 @@ function ProjectsTab({ applications }: { applications: JobApplication[] }) {
                   {project.title || "Project"}
                 </p>
                 <p className="text-xs text-emerald-400">
-                  Earned: ${(project.earnings || 0).toFixed(2)}
+                  Earned: ${(project.earningsCredited ?? project.earnings ?? 0).toFixed(2)}
                 </p>
               </div>
             ))}
@@ -1138,7 +1127,7 @@ function ProjectsTab({ applications }: { applications: JobApplication[] }) {
         </div>
       )}
 
-      {allProjects.length === 0 && readyApps.length === 0 && (
+      {allProjects.length === 0 && allCompleted.length === 0 && readyApps.length === 0 && (
         <EmptyState
           icon="Work"
           title="No Projects Yet"
@@ -1203,17 +1192,9 @@ export default function WorkspacePage() {
 
   // Tab counts for badges
   const tabCounts = useMemo(() => {
-    const screeningCount = applications.filter(
-      (a) =>
-        a.workerStatus === "screening_unlocked" ||
-        a.workerStatus === "training_viewed" ||
-        a.workerStatus === "test_submitted" ||
-        a.workerStatus === "failed",
-    ).length;
+    const screeningCount = applications.filter(hasActiveScreening).length;
 
-    const projectCount = applications.filter(
-      (a) => a.workerStatus === "assigned" || a.workerStatus === "working",
-    ).length;
+    const projectCount = applications.reduce((total, a) => total + a.assignedProjects.length, 0);
 
     return {
       applications: applications.length,
@@ -1227,9 +1208,8 @@ export default function WorkspacePage() {
   const canAccessProjects = useMemo(() => {
     return applications.some(
       (a) =>
-        a.workerStatus === "ready_to_work" ||
-        a.workerStatus === "assigned" ||
-        a.workerStatus === "working",
+        a.assignedProjects.length > 0 || a.completedProjects.length > 0 ||
+        (!a.roleArchived && ["ready_to_work", "assigned", "working"].includes(a.workerStatus)),
     );
   }, [applications]);
 
@@ -1385,7 +1365,7 @@ export default function WorkspacePage() {
                   if (isProjectsLocked) {
                     // Show toast explaining why locked
                     toast(
-                      "Complete your screening test to access projects",
+                      applications.every(a => a.roleArchived) ? "Current and completed assignments appear here." : "Complete your screening test to access projects",
                       "info",
                     );
                     return;

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { isValidSupportEmail, publicSupportEmail } from "@/lib/supportEmail";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -20,7 +21,7 @@ type AdminSettingsDoc = {
   // Legacy fallback (older backend stored bannerText at root)
   bannerText?: string;
   site?: { brandName?: string; bannerText?: string };
-  support?: { whatsappNumber?: string; supportEmail?: string };
+  support?: { whatsappNumber?: string; supportEmail?: string; emailVisible?: boolean };
   footer?: { disclaimer?: string; dataSafetyNote?: string };
   landing?: {
     heroTitle?: string;
@@ -135,6 +136,7 @@ export default function AdminCmsSettingsPage() {
   const [bannerText, setBannerText] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [supportEmail, setSupportEmail] = useState("");
+  const [emailVisible, setEmailVisible] = useState<boolean | undefined>();
 
   // Landing
   const [heroTitle, setHeroTitle] = useState("");
@@ -217,6 +219,7 @@ export default function AdminCmsSettingsPage() {
       setBannerText(String(doc?.site?.bannerText || doc?.bannerText || ""));
       setWhatsappNumber(String(doc?.support?.whatsappNumber || ""));
       setSupportEmail(String(doc?.support?.supportEmail || ""));
+      setEmailVisible(doc?.support?.emailVisible);
 
       setHeroTitle(String(doc?.landing?.heroTitle || ""));
       setHeroSubtitle(String(doc?.landing?.heroSubtitle || ""));
@@ -519,6 +522,7 @@ export default function AdminCmsSettingsPage() {
         support: {
           whatsappNumber: whatsappNumber.trim(),
           supportEmail: supportEmail.trim(),
+          emailVisible,
         },
         footer: {
           disclaimer: disclaimer.trim(),
@@ -681,15 +685,30 @@ export default function AdminCmsSettingsPage() {
               placeholder="e.g. +919749040727"
             />
 
-            <label className="block text-xs text-[#9CA3AF] mt-4">
+            <label htmlFor="support-email" className="block text-xs text-[#9CA3AF] mt-4">
               Support email
             </label>
             <input
+              id="support-email"
+              type="email"
+              maxLength={120}
               className="u-input mt-2"
               value={supportEmail}
               onChange={(e) => setSupportEmail(e.target.value)}
               placeholder="Support inbox (optional)"
             />
+            <label className="mt-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={Boolean(publicSupportEmail(supportEmail, emailVisible))}
+                disabled={!isValidSupportEmail(supportEmail)}
+                onChange={event => setEmailVisible(event.target.checked)} />
+              Show this email on the support page
+            </label>
+            <p className="mt-2 text-xs text-slate-400">
+              Support tickets stay available. Use an inbox that your team monitors.
+            </p>
+            {supportEmail.trim() && !isValidSupportEmail(supportEmail) && (
+              <p className="mt-2 text-xs text-amber-200">Enter a valid email address to publish it.</p>
+            )}
           </div>
         </div>
       )}

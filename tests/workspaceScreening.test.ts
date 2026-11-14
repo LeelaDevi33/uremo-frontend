@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { screeningOutcome, screeningProgress, type ScreeningAttempt } from "../lib/workspaceScreening";
+import { hasActiveScreening, screeningOutcome, screeningProgress, type ScreeningAttempt } from "../lib/workspaceScreening";
 
 test("manual review controls qualification even if a preliminary score passed", () => {
   const attempt = { screeningId: "manual", completedAt: "2026-11-13", passed: true };
@@ -20,6 +20,11 @@ test("worker actions respect role scope, review, inactive assessments and admin 
     workerStatus: "training_viewed",
   };
   assert.equal(screeningProgress(app).next?._id, "next");
+  assert.equal(hasActiveScreening(app), true);
+  const historical = { ...app, roleArchived: true };
+  assert.equal(hasActiveScreening(historical), false);
+  assert.equal(screeningProgress(historical).next, undefined);
+  assert.equal(screeningProgress(historical).passed.has("passed"), true);
   for (const workerStatus of ["failed", "suspended", "test_submitted", "applied"]) {
     assert.equal(screeningProgress({ ...app, workerStatus }).next, undefined);
   }
