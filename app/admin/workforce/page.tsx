@@ -623,7 +623,7 @@ export default function WorkforceControlCenterPage() {
         {/* PATCH_79: What to do next - Enhanced guidance */}
         {!loading && (
           <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-blue-500/10 via-slate-800/50 to-purple-500/10 border border-blue-500/20">
-            <div className="flex items-start gap-3">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
               <span className="text-2xl">⚡</span>
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-white mb-1">
@@ -631,7 +631,7 @@ export default function WorkforceControlCenterPage() {
                 </h3>
                 <ul className="text-sm text-slate-300 space-y-1">
                   {stats.applied > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs flex items-center justify-center">1</span>
                       <span className="text-amber-400 font-medium">
                         {stats.applied} application{stats.applied > 1 ? "s" : ""}
@@ -641,7 +641,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {stats.testSubmitted > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-purple-500/20 text-purple-400 text-xs flex items-center justify-center">2</span>
                       <span className="text-purple-400 font-medium">
                         {stats.testSubmitted} test{stats.testSubmitted > 1 ? "s" : ""} submitted
@@ -651,7 +651,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {stats.readyToWork > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">3</span>
                       <span className="text-emerald-400 font-medium">
                         {stats.readyToWork} worker{stats.readyToWork > 1 ? "s" : ""} ready
@@ -661,7 +661,7 @@ export default function WorkforceControlCenterPage() {
                     </li>
                   )}
                   {pendingProofs.length > 0 && (
-                    <li className="flex items-center gap-2">
+                    <li className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 text-xs flex items-center justify-center">4</span>
                       <span className="text-cyan-400 font-medium">
                         {pendingProofs.length} proof{pendingProofs.length > 1 ? "s" : ""} pending
@@ -682,7 +682,7 @@ export default function WorkforceControlCenterPage() {
               </div>
               <Link
                 href="/admin/work-positions"
-                className="text-xs text-slate-400 hover:text-white whitespace-nowrap"
+                className="col-start-2 w-fit text-xs text-slate-400 hover:text-white lg:col-start-auto"
               >
                 → Job Roles Setup
               </Link>
@@ -738,7 +738,7 @@ export default function WorkforceControlCenterPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-6">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl bg-white/5 p-1">
         {[
           { id: "pipeline" as TabType, label: "Pipeline", icon: "📊" },
           { id: "workers" as TabType, label: "All Workers", icon: "👥" },
@@ -755,17 +755,18 @@ export default function WorkforceControlCenterPage() {
         ].map((tab) => (
           <button
             key={tab.id}
+            aria-pressed={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-medium transition-colors ${
               activeTab === tab.id
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-800 text-white"
                 : "text-slate-400 hover:text-white hover:bg-white/5"
             }`}
           >
             <span>{tab.icon}</span>
             <span>{tab.label}</span>
             {tab.badge ? (
-              <span className="ml-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+              <span className="ml-1 px-2 py-0.5 bg-red-800 text-white text-xs rounded-full">
                 {tab.badge}
               </span>
             ) : null}

@@ -154,7 +154,7 @@ export default function WorkerPipelineCard({
           <div className="flex gap-2">
             <button
               onClick={() => onAction("approve", worker.applicationId)}
-              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg transition-colors"
             >
               ✓ Approve
             </button>
@@ -180,7 +180,7 @@ export default function WorkerPipelineCard({
           <div className="flex gap-2">
             <button
               onClick={() => onAction("mark_passed", worker.applicationId)}
-              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg transition-colors"
             >
               ✓ Pass
             </button>
@@ -242,7 +242,7 @@ export default function WorkerPipelineCard({
                   proofId: worker.pendingProof?._id,
                 })
               }
-              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="flex-1 px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg transition-colors"
             >
               ✓ Approve & Credit
             </button>
@@ -410,7 +410,7 @@ export default function WorkerPipelineCard({
               {jobTitle}
             </span>
           )}
-          <span className="text-slate-500 shrink-0">{getLastActionTime()}</span>
+          <span className="text-slate-400 shrink-0">{getLastActionTime()}</span>
         </div>
 
         {/* Indicators */}

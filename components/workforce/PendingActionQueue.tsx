@@ -157,7 +157,7 @@ export default function PendingActionQueue({
                   <button
                     onClick={() => onAction("approve_application", app._id)}
                     disabled={actionLoading === app._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === app._id ? "..." : "✓ Approve"}
                   </button>
@@ -226,7 +226,7 @@ export default function PendingActionQueue({
                   <button
                     onClick={() => onAction("pass_screening", s._id)}
                     disabled={actionLoading === s._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === s._id ? "..." : "✓ Pass"}
                   </button>
@@ -289,7 +289,7 @@ export default function PendingActionQueue({
                       })
                     }
                     disabled={actionLoading === proof._id}
-                    className="px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50"
                   >
                     {actionLoading === proof._id ? "..." : "✓ Approve & Credit"}
                   </button>
@@ -353,7 +353,7 @@ export default function PendingActionQueue({
                     })
                   }
                   disabled={actionLoading === credit._id}
-                  className="px-4 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg disabled:opacity-50 shrink-0 ml-4"
+                  className="px-4 py-1.5 text-xs font-medium bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg disabled:opacity-50 shrink-0 ml-4"
                 >
                   {actionLoading === credit._id ? "..." : "Credit Now"}
                 </button>
