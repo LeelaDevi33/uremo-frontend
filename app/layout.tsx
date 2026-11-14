@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 
 import "./globals.css";
 
@@ -7,7 +7,12 @@ import { ToastProvider } from "@/hooks/useToast";
 import ToastViewport from "@/components/ToastViewport";
 import SiteFrame from "@/components/SiteFrame";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const inter = localFont({
+  src: "../public/fonts/inter/InterVariable.woff2",
+  weight: "100 900",
+  variable: "--font-sans",
+  display: "swap",
+});
 
 const FAVICON_PATH = "/brand/icon.png";
 

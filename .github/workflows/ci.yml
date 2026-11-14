@@ -1,0 +1,36 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Typecheck and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      UREMO_ENVIRONMENT: staging
+      NEXT_PUBLIC_API_URL: https://api.ci.invalid
+      NEXT_PUBLIC_SOCKET_URL: https://api.ci.invalid
+      JARVISX_BACKEND_URL: https://api.ci.invalid
+      NEXT_PUBLIC_SITE_URL: https://frontend.ci.invalid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.3
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm exec -- next typegen
+      - run: npm exec -- tsc --noEmit
+      - run: npm test
+      - run: npm run build
