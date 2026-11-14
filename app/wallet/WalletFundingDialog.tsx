@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { apiRequest } from "@/lib/api";
 import { paypalApprovalUrl, type FundingOptions } from "@/lib/walletFunding";
 
@@ -59,7 +60,7 @@ export default function WalletFundingDialog({ onClose, onSubmitted }: { onClose:
   return <dialog ref={dialog} aria-labelledby="wallet-funding-title" className="fixed inset-0 m-auto max-h-[90dvh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-6 text-white backdrop:bg-black/70"
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}>
     <h2 id="wallet-funding-title" className="text-xl font-bold">Add wallet funds</h2>
-    {options && !hasOptions && <p className="mt-4 text-slate-300">No funding methods are available. Contact support for help funding your wallet.</p>}
+    {options && !hasOptions && <p className="mt-4 text-slate-300">No funding methods are available. <Link href="/support" className="text-teal-300 underline">Contact support</Link> for help funding your wallet.</p>}
     {!options && !error && <p role="status" className="mt-4">Loading payment methods…</p>}
     {error && <div role="alert" className="my-3 text-amber-200">{error} <button type="button" disabled={busy} onClick={load} className="underline">Reload methods</button></div>}
     <form onSubmit={submit} className="mt-4 space-y-4">

@@ -1,51 +1,38 @@
-import { Metadata } from "next";
-import BlogContent from "./BlogContent";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { cache } from "react";
+import { getApiBaseUrl } from "@/lib/api";
+import BlogContent, { type Blog } from "./BlogContent";
+import ArticleView from "./ArticleView";
 
-// PATCH_21: SEO metadata generation
-type Props = {
-  params: Promise<{ slug: string }>;
-};
+type Props = { params: Promise<{ slug: string }> };
+
+// Metadata and speculative rendering can read the article before a visitor opens it.
+const getArticle = cache(async (slug: string): Promise<Blog | null> => {
+  const res = await fetch(`${getApiBaseUrl()}/api/blogs/${encodeURIComponent(slug)}?countView=false`, {
+    cache: "no-store", signal: AbortSignal.timeout(15000),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("The article could not be loaded.");
+  const data = await res.json();
+  if (!data?.ok || typeof data.blog?.content !== "string") throw new Error("The article could not be loaded.");
+  return data.blog;
+});
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://uremo-backend.onrender.com";
-
-  try {
-    const res = await fetch(`${apiUrl}/api/blogs/${slug}`, {
-      cache: "no-store",
-    });
-    const data = await res.json();
-
-    if (data?.ok && data?.blog) {
-      return {
-        title: `${data.blog.title} | UREMO Blog`,
-        description: data.blog.excerpt || data.blog.title,
-        openGraph: {
-          title: data.blog.title,
-          description: data.blog.excerpt || data.blog.title,
-          images: data.blog.featuredImage ? [data.blog.featuredImage] : [],
-          type: "article",
-        },
-        twitter: {
-          card: "summary_large_image",
-          title: data.blog.title,
-          description: data.blog.excerpt || data.blog.title,
-          images: data.blog.featuredImage ? [data.blog.featuredImage] : [],
-        },
-      };
-    }
-  } catch (err) {
-    console.error("Failed to fetch blog metadata:", err);
-  }
-
+  const blog = await getArticle((await params).slug);
+  if (!blog) return { title: "Article unavailable", robots: { index: false } };
+  const description = blog.excerpt || blog.title;
+  const images = blog.featuredImage ? [blog.featuredImage] : [];
   return {
-    title: "Blog | UREMO",
-    description: "Read the latest articles on UREMO",
+    title: blog.title, description,
+    openGraph: { title: blog.title, description, images, type: "article" },
+    twitter: { title: blog.title, description, images, card: "summary_large_image" },
   };
 }
 
 export default async function BlogPage({ params }: Props) {
-  const { slug } = await params;
-  return <BlogContent slug={slug} />;
+  const blog = await getArticle((await params).slug);
+  if (!blog) notFound();
+  return <><BlogContent blog={blog} /><ArticleView slug={blog.slug} /></>;
 }

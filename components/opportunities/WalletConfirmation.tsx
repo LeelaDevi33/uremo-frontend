@@ -93,7 +93,13 @@ export default function WalletConfirmation({ item, type, token, onCancel, onSucc
         {balance !== null && balance >= expectedAmount && <div><dt>Balance after payment</dt><dd>{formatPrice(balance - expectedAmount, item.currency)}</dd></div>}
       </dl>
       {state.phase !== "loading" && balance === null && <button type="button" className={styles.textLink} onClick={reload}>Retry balance check</button>}
-      {balance !== null && balance < expectedAmount && <p className={styles.alert}>You need {formatPrice(expectedAmount - balance, item.currency)} more in your wallet.</p>}
+      {balance !== null && balance < expectedAmount && <div>
+        <p className={styles.alert}>You need {formatPrice(expectedAmount - balance, item.currency)} more in your wallet.</p>
+        <div className={styles.buttonRow}>
+          <Link href="/wallet" target="_blank" rel="noopener" className={styles.secondary}>Add funds in a new tab</Link>
+          <button type="button" onClick={reload} className={styles.textLink}>Refresh balance</button>
+        </div>
+      </div>}
       {message && <p role="alert" className={styles.alert}>{message}</p>}
       {uncertain && <Link href="/opportunities/access" className={styles.textLink}>Check My access</Link>}
       <div className={styles.buttonRow}>

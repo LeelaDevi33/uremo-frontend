@@ -108,9 +108,15 @@ interface Transaction {
   // PATCH_82: Added paid_unverified for PayPal
   status?: "initiated" | "pending" | "paid_unverified" | "success" | "failed";
   provider?: string;
+  providerRef?: string;
   methodName?: string;
   paymentReference?: string;
   failureReason?: string;
+}
+
+async function confirmPayPalPayment(orderId: string) {
+  const result = await apiRequest<{ success: boolean; status: string }>("/api/wallet/topup/paypal/confirm", "POST", { paypalOrderId: orderId }, true);
+  if (!result.success || result.status !== "success") throw new Error("Your wallet credit is awaiting confirmation.");
 }
 
 export default function WalletPage() {
@@ -128,6 +134,7 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
   const [returnError, setReturnError] = useState("");
+  const [verifyingId, setVerifyingId] = useState("");
   const [returnAttempt, setReturnAttempt] = useState(0);
   const activeReturn = useRef("");
   const historyRequest = useRef(0);
@@ -175,18 +182,31 @@ export default function WalletPage() {
     if (activeReturn.current === key) return;
     activeReturn.current = key;
     setReturnError("");
-    async function confirm() {
+    async function confirm(id: string) {
       try {
-        const result = await apiRequest<{ success: boolean; status: string }>("/api/wallet/topup/paypal/confirm", "POST", { paypalOrderId: orderId }, true);
-        if (!result.success || result.status !== "success") throw new Error("Your wallet credit is awaiting confirmation.");
+        await confirmPayPalPayment(id);
         window.history.replaceState(null, "", "/wallet");
         toast("PayPal payment confirmed. Your wallet has been credited.", "success");
       } catch (cause) {
         setReturnError(cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.");
       } finally { await fetchData(); }
     }
-    void confirm();
+    void confirm(orderId);
   }, [ready, isAuthenticated, router, toast, returnAttempt, fetchData]);
+
+  async function verifyPayment(providerRef: string) {
+    if (verifyingId) return;
+    setVerifyingId(providerRef);
+    try {
+      await confirmPayPalPayment(providerRef);
+      toast("PayPal payment confirmed. Your wallet has been credited.", "success");
+    } catch (cause) {
+      toast(cause instanceof Error ? cause.message : "Could not verify the PayPal payment.", "error");
+    } finally {
+      await fetchData();
+      setVerifyingId("");
+    }
+  }
 
   const getSourceLabel = (source: string) => {
     const labels: Record<string, string> = {
@@ -455,7 +475,7 @@ export default function WalletPage() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors ${
+                  className={`p-4 flex flex-wrap gap-3 items-center justify-between hover:bg-slate-800/30 transition-colors ${
                     tx.status && tx.status !== "success" ? "opacity-75" : ""
                   }`}
                 >
@@ -497,6 +517,9 @@ export default function WalletPage() {
                           minute: "2-digit",
                         })}
                       </p>
+                      {tx.provider === "paypal" && tx.source === "topup" && tx.status === "paid_unverified" && tx.providerRef && /^[A-Z0-9]{1,36}$/.test(tx.providerRef) &&
+                        <button type="button" disabled={!!verifyingId} className="mt-2 text-sm text-teal-300 underline disabled:opacity-50"
+                          onClick={() => void verifyPayment(tx.providerRef!)}>{verifyingId === tx.providerRef ? "Verifying…" : "Verify PayPal payment"}</button>}
                     </div>
                   </div>
                   <div className="text-right">

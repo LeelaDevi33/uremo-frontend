@@ -21,6 +21,8 @@ type ScreeningOption = {
 };
 
 type Project = {
+  revision?: string;
+  updatedAt?: string;
   marketplaceReserved?: boolean;
   _id?: string;
   title: string;
@@ -191,6 +193,7 @@ export default function AdminJobRolePage() {
     "list",
   );
   // PATCH_88: Edit project state
+  const [projectConflict, setProjectConflict] = useState("");
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editProjectScreeningIds, setEditProjectScreeningIds] = useState<
     string[]
@@ -535,6 +538,7 @@ export default function AdminJobRolePage() {
 
   // PATCH_88: Edit project with screening management
   const startEditProject = (proj: Project) => {
+    setProjectConflict("");
     setEditingProject(proj);
     // Extract screening IDs from populated or string references
     const ids: string[] = [];
@@ -555,13 +559,14 @@ export default function AdminJobRolePage() {
   };
 
   const saveEditProject = async () => {
-    if (!editingProject?._id) return;
+    if (!editingProject?._id || saving || projectConflict) return;
     setSaving(true);
     try {
       await apiRequest(
         `/api/admin/workspace/project/${editingProject._id}`,
         "PUT",
         {
+          expectedRevision: editingProject.revision || editingProject.updatedAt,
           title: editingProject.title,
           description: editingProject.description,
           instructions: editingProject.instructions,
@@ -578,7 +583,12 @@ export default function AdminJobRolePage() {
       setEditingProject(null);
       loadProjects();
     } catch (e: any) {
-      toast(e?.message || "Failed to update project", "error");
+      if (e instanceof ApiError && (e.status === 428 || (e.payload as { code?: string } | null)?.code === "STALE_PROJECT")) {
+        setProjectConflict(e.message);
+        void loadProjects();
+      } else {
+        toast(e.message || "Failed to update project", "error");
+      }
     } finally {
       setSaving(false);
     }
@@ -1943,10 +1953,14 @@ export default function AdminJobRolePage() {
                   </div>
                 </div>
 
+                {projectConflict && <p role="alert" className="text-amber-200">{projectConflict} Your draft is still here.{" "}
+                  <Link href={`/admin/workspace/projects?action=view&id=${editingProject._id}`} target="_blank" rel="noopener" className="underline">View the latest project in a new tab</Link>.
+                  Cancel to reopen the current version from the project list.
+                </p>}
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={saveEditProject}
-                    disabled={saving}
+                    disabled={saving || Boolean(projectConflict)}
                     className="btn-primary disabled:opacity-50"
                   >
                     {saving ? "Saving..." : "💾 Save Project"}

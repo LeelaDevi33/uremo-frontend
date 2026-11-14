@@ -18,8 +18,10 @@ function ProjectOptions({ item, mode, token, refresh }: { item: Opportunity; mod
   const types = (["rent", "buy"] as const).filter(type => type === "rent" ? item.rentEnabled : item.buyEnabled);
   return <aside className={styles.options} aria-labelledby="access-options">
     <h2 id="access-options">Project access</h2>
-    {item.availability === "sold" ? <p className={styles.closed}>Someone already holds Full Access to this project.</p> :
-      item.availability === "rented" ? <p className={styles.closed}>This project is currently rented. Access will reopen when the rental ends.</p> :
+    {item.availability === "sold" || item.availability === "rented" ? <div>
+      <p className={styles.closed}>{item.availability === "sold" ? "Full Access has already been purchased." : "This project is currently rented."}</p>
+      {token && <Link className={styles.textLink} href="/opportunities/access">My project access</Link>}
+    </div> :
       !types.length ? <p className={styles.closed}>This project has no current offer.</p> :
       types.map(type => {
         const rent = type === "rent";

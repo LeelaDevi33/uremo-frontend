@@ -138,16 +138,9 @@ function LoginForm() {
     }
   };
 
-  // PATCH_54: Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      submit();
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
+      <form noValidate onSubmit={event => { event.preventDefault(); if (!loading) void submit(); }} className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
         <h1 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
           <span role="img" aria-label="login">
             🔑
@@ -172,7 +165,6 @@ function LoginForm() {
               if (errors.email)
                 setErrors((prev) => ({ ...prev, email: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="email"
           />
@@ -200,7 +192,6 @@ function LoginForm() {
                 if (errors.password)
                   setErrors((prev) => ({ ...prev, password: undefined }));
               }}
-              onKeyDown={handleKeyDown}
               disabled={loading}
               autoComplete="current-password"
             />
@@ -219,7 +210,7 @@ function LoginForm() {
         </div>
 
         <button
-          onClick={submit}
+          type="submit"
           disabled={loading}
           className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
@@ -242,7 +233,7 @@ function LoginForm() {
             Sign up
           </a>
         </p>
-      </div>
+      </form>
     </div>
   );
 }

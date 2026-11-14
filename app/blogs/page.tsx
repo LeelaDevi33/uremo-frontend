@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { apiRequest } from "@/lib/api";
+import { useOpportunityData } from "@/components/opportunities/useOpportunityData";
 import { withCacheBust } from "@/lib/cacheBust";
 
 // PATCH_62: Blog category labels aligned with backend
@@ -25,38 +25,24 @@ interface Blog {
 }
 
 export default function BlogsPage() {
-  const [blogs, setBlogs] = useState<Blog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [categories, setCategories] = useState<string[]>([]);
   const [search, setSearch] = useState("");
-
-  const loadBlogs = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (selectedCategory !== "all") params.set("category", selectedCategory);
-      if (search.trim()) params.set("search", search.trim());
-
-      const res = await apiRequest(`/api/blogs?${params.toString()}`);
-      if (res?.ok) {
-        setBlogs(res.blogs || []);
-        setCategories(res.filters?.categories || []);
-      }
-    } catch (err) {
-      console.error("Failed to load blogs:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadBlogs();
-  }, [selectedCategory]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    loadBlogs();
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const params = new URLSearchParams({ page: String(page) });
+  if (selectedCategory !== "all") params.set("category", selectedCategory);
+  if (query) params.set("search", query);
+  const { state, reload } = useOpportunityData<{
+    ok: boolean; blogs: Blog[]; filters: { categories: string[] }; meta: { pages: number };
+  }>(`/api/blogs?${params}`);
+  const result = state.phase === "loaded" && state.data.ok && Array.isArray(state.data.blogs) ? state.data : null;
+  const blogs = result?.blogs || [];
+  const categories = result?.filters?.categories || [];
+  const pages = result?.meta?.pages || 0;
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    setPage(1);
+    setQuery(search.trim());
   };
 
   return (
@@ -80,7 +66,8 @@ export default function BlogsPage() {
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative">
               <input
-                type="text"
+                type="search"
+                aria-label="Search articles"
                 placeholder="Search articles..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -100,14 +87,17 @@ export default function BlogsPage() {
                 />
               </svg>
             </div>
+            <button type="submit" className="mt-2 text-sm text-teal-300 underline">Search articles</button>
           </form>
 
           <select
+            aria-label="Article category"
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
+            onChange={(e) => { setSelectedCategory(e.target.value); setPage(1); }}
             className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-500 transition"
           >
             <option value="all">All Categories</option>
+            {selectedCategory !== "all" && !categories.includes(selectedCategory) && <option value={selectedCategory}>{CATEGORY_LABELS[selectedCategory] || selectedCategory}</option>}
             {categories.map((cat) => (
               <option key={cat} value={cat}>
                 {CATEGORY_LABELS[cat] || cat}
@@ -117,9 +107,13 @@ export default function BlogsPage() {
         </div>
 
         {/* Blog Grid */}
-        {loading ? (
-          <div className="flex justify-center py-20">
+        {state.phase === "loading" ? (
+          <div role="status" className="flex justify-center py-20"><span className="sr-only">Loading articles…</span>
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          </div>
+        ) : !result ? (
+          <div role="alert" className="py-12 text-center text-slate-300">Published articles could not be loaded.{" "}
+            <button type="button" className="text-teal-300 underline" onClick={reload}>Retry loading articles</button>
           </div>
         ) : blogs.length === 0 ? (
           <div className="text-center py-20">
@@ -130,7 +124,7 @@ export default function BlogsPage() {
               No articles found
             </h3>
             <p className="text-slate-400">
-              {search
+              {query || selectedCategory !== "all"
                 ? "Try a different search term"
                 : "Check back soon for new content!"}
             </p>
@@ -196,6 +190,11 @@ export default function BlogsPage() {
             ))}
           </div>
         )}
+        {pages > 1 && <nav aria-label="Article pages" className="mt-8 flex items-center justify-center gap-4">
+          <button type="button" disabled={page <= 1} className="underline disabled:opacity-40" onClick={() => setPage(page - 1)}>Previous</button>
+          <span>Page {page} of {pages}</span>
+          <button type="button" disabled={page >= pages} className="underline disabled:opacity-40" onClick={() => setPage(page + 1)}>Next</button>
+        </nav>}
       </div>
     </div>
   );

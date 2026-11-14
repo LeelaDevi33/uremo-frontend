@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiRequest, setAuthSession } from "@/lib/api";
 import { authReturnPath } from "@/lib/authReturnPath";
@@ -91,16 +91,7 @@ function SignupForm() {
     password?: string;
     confirmPassword?: string;
   }>({});
-  // PATCH_23: Referral code from URL
-  const [referralCode, setReferralCode] = useState("");
-
-  // PATCH_23: Get referral code from URL on mount
-  useEffect(() => {
-    const ref = searchParams.get("ref");
-    if (ref) {
-      setReferralCode(ref.toUpperCase());
-    }
-  }, [searchParams]);
+  const referralCode = searchParams.get("ref")?.trim().toUpperCase() || "";
 
   // PATCH_54: Password strength validation
   const passwordStrength = PASSWORD_RULES.map((rule) => ({
@@ -197,15 +188,8 @@ function SignupForm() {
     }
   };
 
-  // PATCH_54: Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !loading) {
-      submit();
-    }
-  };
-
   return (
-    <div className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
+    <form noValidate onSubmit={event => { event.preventDefault(); if (!loading) void submit(); }} className="w-full max-w-sm border border-slate-700 rounded-lg p-6 bg-slate-800">
       <h1 className="text-xl font-semibold mb-4 text-white flex items-center gap-2">
         <span role="img" aria-label="signup">
           🚀
@@ -217,18 +201,21 @@ function SignupForm() {
       {referralCode && (
         <div className="mb-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
           <p className="text-sm text-purple-200">
-            Referral code applied:{" "}
+            Referral code:{" "}
             <span className="font-mono font-bold">{referralCode}</span>
           </p>
         </div>
       )}
 
       <div className="mb-3">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="signup-name" className="block text-sm font-medium mb-1 text-slate-300">
           Full Name
         </label>
         <input
           type="text"
+          id="signup-name"
+          aria-invalid={Boolean(errors.name)}
+          aria-describedby={errors.name ? "signup-name-error" : undefined}
           placeholder="Full Name"
           className={`w-full border p-2 rounded bg-slate-700 text-white placeholder-slate-400 ${
             errors.name ? "border-red-500" : "border-slate-600"
@@ -239,17 +226,16 @@ function SignupForm() {
             if (errors.name)
               setErrors((prev) => ({ ...prev, name: undefined }));
           }}
-          onKeyDown={handleKeyDown}
           disabled={loading}
           autoComplete="name"
         />
         {errors.name && (
-          <p className="text-red-400 text-xs mt-1">{errors.name}</p>
+          <p id="signup-name-error" role="alert" className="text-red-400 text-xs mt-1">{errors.name}</p>
         )}
       </div>
 
       <div className="mb-3">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="signup-email" className="block text-sm font-medium mb-1 text-slate-300">
           Email
         </label>
         <input
@@ -257,6 +243,9 @@ function SignupForm() {
             errors.email ? "border-red-500" : "border-slate-600"
           }`}
           type="email"
+          id="signup-email"
+          aria-invalid={Boolean(errors.email)}
+          aria-describedby={errors.email ? "signup-email-error" : undefined}
           placeholder="Email"
           value={email}
           onChange={(e) => {
@@ -264,18 +253,17 @@ function SignupForm() {
             if (errors.email)
               setErrors((prev) => ({ ...prev, email: undefined }));
           }}
-          onKeyDown={handleKeyDown}
           disabled={loading}
           autoComplete="email"
         />
         {errors.email && (
-          <p className="text-red-400 text-xs mt-1">{errors.email}</p>
+          <p id="signup-email-error" role="alert" className="text-red-400 text-xs mt-1">{errors.email}</p>
         )}
       </div>
 
       {/* PATCH_54: Password with visibility toggle */}
       <div className="mb-3">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="signup-password" className="block text-sm font-medium mb-1 text-slate-300">
           Password
         </label>
         <div className="relative">
@@ -284,6 +272,9 @@ function SignupForm() {
               errors.password ? "border-red-500" : "border-slate-600"
             }`}
             type={showPassword ? "text" : "password"}
+            id="signup-password"
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? "signup-password-error" : "signup-password-rules"}
             placeholder="Password"
             value={password}
             onChange={(e) => {
@@ -291,7 +282,6 @@ function SignupForm() {
               if (errors.password)
                 setErrors((prev) => ({ ...prev, password: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="new-password"
           />
@@ -299,19 +289,18 @@ function SignupForm() {
             type="button"
             onClick={() => setShowPassword(!showPassword)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            tabIndex={-1}
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         </div>
         {errors.password && (
-          <p className="text-red-400 text-xs mt-1">{errors.password}</p>
+          <p id="signup-password-error" role="alert" className="text-red-400 text-xs mt-1">{errors.password}</p>
         )}
 
         {/* PATCH_54: Password strength indicator */}
-        {password && (
-          <div className="mt-2 space-y-1">
+        {password ? (
+          <div id="signup-password-rules" className="mt-2 space-y-1">
             {passwordStrength.map((rule) => (
               <div key={rule.id} className="flex items-center gap-2 text-xs">
                 <span
@@ -327,12 +316,12 @@ function SignupForm() {
               </div>
             ))}
           </div>
-        )}
+        ) : <p id="signup-password-rules" className="mt-1 text-xs text-slate-300">Use at least 8 characters with uppercase and lowercase letters, a number and a special character.</p>}
       </div>
 
       {/* PATCH_54: Confirm password with visibility toggle */}
       <div className="mb-4">
-        <label className="block text-sm font-medium mb-1 text-slate-300">
+        <label htmlFor="signup-confirmPassword" className="block text-sm font-medium mb-1 text-slate-300">
           Confirm Password
         </label>
         <div className="relative">
@@ -341,6 +330,9 @@ function SignupForm() {
               errors.confirmPassword ? "border-red-500" : "border-slate-600"
             }`}
             type={showConfirmPassword ? "text" : "password"}
+            id="signup-confirmPassword"
+            aria-invalid={Boolean(errors.confirmPassword)}
+            aria-describedby={errors.confirmPassword ? "signup-confirmPassword-error" : undefined}
             placeholder="Confirm Password"
             value={confirmPassword}
             onChange={(e) => {
@@ -348,7 +340,6 @@ function SignupForm() {
               if (errors.confirmPassword)
                 setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
             }}
-            onKeyDown={handleKeyDown}
             disabled={loading}
             autoComplete="new-password"
           />
@@ -356,19 +347,18 @@ function SignupForm() {
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
-            tabIndex={-1}
-            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            aria-label={showConfirmPassword ? "Hide confirmation password" : "Show confirmation password"}
           >
             {showConfirmPassword ? <EyeSlashIcon /> : <EyeIcon />}
           </button>
         </div>
         {errors.confirmPassword && (
-          <p className="text-red-400 text-xs mt-1">{errors.confirmPassword}</p>
+          <p id="signup-confirmPassword-error" role="alert" className="text-red-400 text-xs mt-1">{errors.confirmPassword}</p>
         )}
       </div>
 
       <button
-        onClick={submit}
+        type="submit"
         disabled={loading}
         className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
@@ -381,7 +371,7 @@ function SignupForm() {
           Login
         </a>
       </p>
-    </div>
+    </form>
   );
 }
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { getJobRoleCategoryLabel } from "@/lib/categoryLabels"; // PATCH_72
 import ConfirmModal from "@/components/admin/v2/ConfirmModal";
 import {
@@ -21,6 +21,8 @@ import {
 
 interface Project {
   _id: string;
+  revision?: string;
+  updatedAt?: string;
   marketplaceReserved?: boolean;
   title: string;
   description: string;
@@ -198,6 +200,8 @@ function ProjectsContent() {
     screeningId: "",
     screeningIds: [] as string[], // PATCH_88: Multiple screenings
   });
+  const [editError, setEditError] = useState("");
+  const [editConflict, setEditConflict] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewData, setViewData] = useState<any>(null);
@@ -491,6 +495,8 @@ function ProjectsContent() {
 
   // PATCH_65.1: Open edit modal with project data
   const handleOpenEdit = (project: Project) => {
+    setEditError("");
+    setEditConflict(false);
     setEditForm({
       deliverables: (project.deliverables || []).map(d => ({ ...d, title: d.title || "", description: d.description || "", required: d.required !== false })),
       title: project.title || "",
@@ -515,8 +521,9 @@ function ProjectsContent() {
 
   // PATCH_65.1: Handle update project
   const handleUpdateProject = async () => {
-    if (!editModal) return;
+    if (!editModal || updating || editConflict) return;
 
+    setEditError("");
     setUpdating(true);
     setError(null);
     try {
@@ -525,6 +532,7 @@ function ProjectsContent() {
         "PUT",
         {
           ...editForm,
+          expectedRevision: editModal.revision || editModal.updatedAt,
           screeningId: editForm.screeningIds[0] || editForm.screeningId || null,
         },
         true,
@@ -533,7 +541,8 @@ function ProjectsContent() {
       setEditModal(null);
       loadProjects();
     } catch (e: any) {
-      setError(e.message || "Failed to update project");
+      setEditConflict(e instanceof ApiError && (e.status === 428 || (e.payload as { code?: string } | null)?.code === "STALE_PROJECT"));
+      setEditError(e.message || "Failed to update project");
     } finally {
       setUpdating(false);
     }
@@ -547,13 +556,14 @@ function ProjectsContent() {
       await apiRequest(
         `/api/admin/workspace/project/${project._id}`,
         "DELETE",
-        null,
+        { expectedRevision: project.revision || project.updatedAt },
         true,
       );
       setSuccess("Project deleted successfully!");
       loadProjects();
     } catch (e: any) {
       setError(e.message || "Failed to delete project");
+      if (e instanceof ApiError && [409, 428].includes(e.status)) void loadProjects();
     }
   };
 
@@ -1601,7 +1611,8 @@ function ProjectsContent() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-white">Edit Project</h2>
               <button
-                onClick={() => setEditModal(null)}
+                disabled={updating}
+                  onClick={() => setEditModal(null)}
                 aria-label="Close project editor"
                 className="text-slate-400 hover:text-white text-2xl"
               >
@@ -1609,6 +1620,19 @@ function ProjectsContent() {
               </button>
             </div>
 
+            {editError && <p role="alert" className="mb-4 text-amber-200">{editError}
+              {editConflict && <> Your draft is still here. <Link className="underline" target="_blank" rel="noopener"
+                href={`/admin/workspace/projects?action=view&id=${editModal._id}`}>View the latest project in a new tab</Link>
+                {" · "}<button type="button" disabled={updating} className="underline" onClick={async () => {
+                  setUpdating(true);
+                  try {
+                    const result = await apiRequest<{ project: Project }>(`/api/admin/workspace/project/${editModal._id}`, "GET", null, true);
+                    handleOpenEdit(result.project);
+                    void loadProjects();
+                  } catch (cause) { setEditError(cause instanceof Error ? cause.message : "Could not reload this project."); }
+                  finally { setUpdating(false); }
+                }}>Discard my draft and reload</button></>}
+            </p>}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1815,6 +1839,7 @@ function ProjectsContent() {
               <div className="flex gap-3 pt-4 border-t border-slate-700">
                 <button
                   type="button"
+                  disabled={updating}
                   onClick={() => setEditModal(null)}
                   className="btn-secondary flex-1"
                 >
@@ -1822,7 +1847,7 @@ function ProjectsContent() {
                 </button>
                 <button
                   type="submit"
-                  disabled={updating || !editForm.title}
+                  disabled={updating || editConflict || !editForm.title}
                   className="btn-primary flex-1 disabled:opacity-50"
                 >
                   {updating ? "Saving..." : "Save Changes"}

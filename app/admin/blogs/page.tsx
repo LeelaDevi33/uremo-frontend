@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { withCacheBust } from "@/lib/cacheBust";
@@ -48,6 +48,7 @@ export default function AdminBlogsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   // Form state
+  const dialog = useRef<HTMLDialogElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -71,6 +72,12 @@ export default function AdminBlogsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  useEffect(() => {
+    const element = dialog.current;
+    if (showForm) element?.showModal();
+    return () => element?.close();
+  }, [showForm]);
+
   // Load blog posts independently from the retired service catalogue.
   const loadData = useCallback(async () => {
     try {
@@ -82,7 +89,15 @@ export default function AdminBlogsPage() {
       }
 
       const blogsRes = await apiRequest("/api/admin/blogs", "GET", null, true);
-      if (blogsRes?.ok) setBlogs(blogsRes.blogs || []);
+      if (!blogsRes?.ok || !Array.isArray(blogsRes.blogs)) throw new Error("Could not load posts.");
+      const posts = [...blogsRes.blogs];
+      for (let page = 2; page <= blogsRes.meta?.pages; page++) {
+        const more = await apiRequest(`/api/admin/blogs?page=${page}`, "GET", null, true);
+        if (!more?.ok || !Array.isArray(more.blogs)) throw new Error("Could not load the blog archive.");
+        posts.push(...more.blogs);
+      }
+      setBlogs(posts);
+      setError(null);
     } catch (err) {
       console.error("Failed to load data:", err);
       setError("Failed to load blogs");
@@ -97,17 +112,17 @@ export default function AdminBlogsPage() {
 
   // Clear messages
   useEffect(() => {
-    if (success || error) {
+    if (success) {
       const timer = setTimeout(() => {
         setSuccess(null);
-        setError(null);
       }, 4000);
       return () => clearTimeout(timer);
     }
-  }, [success, error]);
+  }, [success]);
 
   // Reset form
   const resetForm = () => {
+    setError(null);
     setFormData({
       title: "",
       excerpt: "",
@@ -129,7 +144,8 @@ export default function AdminBlogsPage() {
   };
 
   // Open form for editing
-  const openEditForm = async (blog: Blog) => {
+  const openEditForm = (blog: Blog) => {
+    setError(null);
     setFormData({
       title: blog.title,
       excerpt: blog.excerpt || "",
@@ -243,7 +259,7 @@ export default function AdminBlogsPage() {
       }
     } catch (err) {
       console.error("Save failed:", err);
-      setError("Failed to save blog");
+      setError(err instanceof Error ? err.message : "Failed to save blog");
     } finally {
       setSaving(false);
     }
@@ -272,7 +288,7 @@ export default function AdminBlogsPage() {
       }
     } catch (err) {
       console.error("Delete failed:", err);
-      setError("Failed to delete blog");
+      setError(err instanceof Error ? err.message : "Failed to delete blog");
     }
   };
 
@@ -329,9 +345,9 @@ export default function AdminBlogsPage() {
         </div>
 
         {/* Messages */}
-        {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
-            {error}
+        {error && !showForm && (
+          <div role="alert" className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+            {error} <button type="button" className="underline" onClick={loadData}>Reload posts</button>
           </div>
         )}
         {success && (
@@ -342,14 +358,15 @@ export default function AdminBlogsPage() {
 
         {/* Form Modal */}
         {showForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-            <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[#0F172A] rounded-2xl border border-white/10 shadow-2xl">
+          <dialog ref={dialog} aria-labelledby="blog-editor-title" onCancel={event => { event.preventDefault(); if (!saving) resetForm(); }}
+            className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-4xl max-h-[90dvh] overflow-y-auto bg-[#0F172A] text-white rounded-2xl border border-white/10 shadow-2xl backdrop:bg-black/70">
+            <div>
               <div className="sticky top-0 z-10 bg-[#0F172A] px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">
+                <h2 id="blog-editor-title" className="text-xl font-bold text-white">
                   {editingId ? "Edit Blog Post" : "New Blog Post"}
                 </h2>
                 <button
-                  onClick={resetForm}
+                  onClick={resetForm} disabled={saving} aria-label="Close blog editor"
                   className="p-2 rounded-lg hover:bg-white/10 transition text-slate-400"
                 >
                   <svg
@@ -369,12 +386,13 @@ export default function AdminBlogsPage() {
               </div>
 
               <div className="p-6 space-y-6">
+                {error && <p role="alert" className="text-amber-200">{error}</p>}
                 {/* Title */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="blog-title" className="block text-sm font-medium text-slate-300 mb-2">
                     Title <span className="text-red-400">*</span>
                   </label>
-                  <input
+                  <input id="blog-title"
                     type="text"
                     value={formData.title}
                     onChange={(e) =>
@@ -387,10 +405,10 @@ export default function AdminBlogsPage() {
 
                 {/* Excerpt */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="blog-excerpt" className="block text-sm font-medium text-slate-300 mb-2">
                     Excerpt
                   </label>
-                  <textarea
+                  <textarea id="blog-excerpt"
                     value={formData.excerpt}
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, excerpt: e.target.value }))
@@ -403,10 +421,10 @@ export default function AdminBlogsPage() {
 
                 {/* Content */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="blog-content" className="block text-sm font-medium text-slate-300 mb-2">
                     Content <span className="text-red-400">*</span>
                   </label>
-                  <textarea
+                  <textarea id="blog-content"
                     value={formData.content}
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, content: e.target.value }))
@@ -424,10 +442,10 @@ export default function AdminBlogsPage() {
                 {/* Category & Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label htmlFor="blog-category" className="block text-sm font-medium text-slate-300 mb-2">
                       Category
                     </label>
-                    <select
+                    <select id="blog-category"
                       value={formData.category}
                       onChange={(e) =>
                         setFormData((p) => ({ ...p, category: e.target.value }))
@@ -449,10 +467,10 @@ export default function AdminBlogsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label htmlFor="blog-status" className="block text-sm font-medium text-slate-300 mb-2">
                       Status
                     </label>
-                    <select
+                    <select id="blog-status"
                       value={formData.status}
                       onChange={(e) =>
                         setFormData((p) => ({
@@ -477,12 +495,12 @@ export default function AdminBlogsPage() {
 
                 {/* Featured Image */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label htmlFor="blog-image" className="block text-sm font-medium text-slate-300 mb-2">
                     Featured Image
                   </label>
                   <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1">
-                      <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/20 hover:border-blue-500/50 cursor-pointer transition bg-white/[0.02]">
+                      <label className="flex flex-col items-center justify-center w-full h-32 rounded-xl border-2 border-dashed border-white/20 hover:border-blue-500/50 focus-within:ring-2 focus-within:ring-blue-400 cursor-pointer transition bg-white/[0.02]">
                         <svg
                           className="w-8 h-8 text-slate-500 mb-2"
                           fill="none"
@@ -500,10 +518,10 @@ export default function AdminBlogsPage() {
                           Click to upload image
                         </span>
                         <input
-                          type="file"
+                          id="blog-image" type="file"
                           accept="image/*"
                           onChange={handleImageSelect}
-                          className="hidden"
+                          className="sr-only"
                         />
                       </label>
                     </div>
@@ -532,7 +550,7 @@ export default function AdminBlogsPage() {
               {/* Form Actions */}
               <div className="sticky bottom-0 bg-[#0F172A] px-6 py-4 border-t border-white/10 flex items-center justify-end gap-3">
                 <button
-                  onClick={resetForm}
+                  onClick={resetForm} disabled={saving}
                   className="px-6 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:bg-white/5 transition"
                 >
                   Cancel
@@ -568,7 +586,7 @@ export default function AdminBlogsPage() {
                 </button>
               </div>
             </div>
-          </div>
+          </dialog>
         )}
 
         {/* Filters */}
@@ -576,6 +594,7 @@ export default function AdminBlogsPage() {
           <div className="flex-1">
             <input
               type="text"
+              aria-label="Search blog posts"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search blogs..."
@@ -583,6 +602,7 @@ export default function AdminBlogsPage() {
             />
           </div>
           <select
+            aria-label="Filter posts by category"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:border-blue-500 outline-none transition"
@@ -601,6 +621,7 @@ export default function AdminBlogsPage() {
             ))}
           </select>
           <select
+            aria-label="Filter posts by status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:border-blue-500 outline-none transition"
@@ -742,12 +763,12 @@ export default function AdminBlogsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-2">
-                          <a
+                          {blog.status === "published" && CATEGORY_OPTIONS.some(option => option.value === blog.category) && <a
                             href={`/blogs/${blog.slug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-2 rounded-lg hover:bg-white/10 transition text-slate-400 hover:text-white"
-                            title="View"
+                            aria-label={`View ${blog.title}`} title="View"
                           >
                             <svg
                               className="w-4 h-4"
@@ -768,11 +789,11 @@ export default function AdminBlogsPage() {
                                 d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                               />
                             </svg>
-                          </a>
+                          </a>}
                           <button
                             onClick={() => openEditForm(blog)}
                             className="p-2 rounded-lg hover:bg-blue-500/20 transition text-slate-400 hover:text-blue-400"
-                            title="Edit"
+                            aria-label={`Edit ${blog.title}`} title="Edit"
                           >
                             <svg
                               className="w-4 h-4"
@@ -791,7 +812,7 @@ export default function AdminBlogsPage() {
                           <button
                             onClick={() => handleDelete(blog._id)}
                             className="p-2 rounded-lg hover:bg-red-500/20 transition text-slate-400 hover:text-red-400"
-                            title="Delete"
+                            aria-label={`Delete ${blog.title}`} title="Delete"
                           >
                             <svg
                               className="w-4 h-4"
