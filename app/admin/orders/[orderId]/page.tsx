@@ -689,7 +689,7 @@ export default function AdminOrderDetailPage() {
             {uploading ? "⏳" : "📎"}
           </button>
           <input
-            className="flex-1 rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#64748B]"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#020617] px-3 py-2 text-sm text-white placeholder:text-[#94a3b8]"
             placeholder="Reply to user…"
             value={reply}
             onChange={(e) => {

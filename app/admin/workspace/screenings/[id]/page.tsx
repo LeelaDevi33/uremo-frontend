@@ -876,6 +876,7 @@ export default function AdminScreeningEditorPage() {
                           ) : (
                             <input
                               type="checkbox"
+                              aria-label={`Mark option ${oIndex + 1} correct for question ${qIndex + 1}`}
                               checked={q.correctAnswerIndexes.includes(oIndex)}
                               onChange={() =>
                                 toggleCorrectAnswer(qIndex, oIndex)
