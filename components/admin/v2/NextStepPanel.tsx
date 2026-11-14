@@ -21,19 +21,19 @@ const variantStyles = {
     bg: "bg-blue-500/10",
     border: "border-blue-500/30",
     icon: "bg-blue-500/20",
-    button: "bg-blue-600 hover:bg-blue-500",
+    button: "bg-blue-800 hover:bg-blue-900",
   },
   warning: {
     bg: "bg-amber-500/10",
     border: "border-amber-500/30",
     icon: "bg-amber-500/20",
-    button: "bg-amber-600 hover:bg-amber-500",
+    button: "bg-amber-800 hover:bg-amber-900",
   },
   success: {
     bg: "bg-emerald-500/10",
     border: "border-emerald-500/30",
     icon: "bg-emerald-500/20",
-    button: "bg-emerald-600 hover:bg-emerald-500",
+    button: "bg-emerald-800 hover:bg-emerald-900",
   },
 };
 

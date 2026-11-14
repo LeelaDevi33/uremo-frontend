@@ -523,12 +523,12 @@ export default function MasterWorkspacePage() {
                     setSelectedCategory(isSelected ? null : cat.key)
                   }
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
                       <span className="text-2xl">{cat.icon}</span>
                       <div>
                         <h3 className="font-medium text-white">{cat.label}</h3>
-                        <div className="flex items-center gap-4 text-sm text-slate-400">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400">
                           <span>
                             <span className="text-cyan-400 font-medium">
                               {data.screenings.length}
@@ -563,7 +563,7 @@ export default function MasterWorkspacePage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       {/* Execution State Badge */}
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge.color}`}

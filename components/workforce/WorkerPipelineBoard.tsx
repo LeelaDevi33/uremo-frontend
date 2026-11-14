@@ -205,7 +205,7 @@ export default function WorkerPipelineBoard({
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="text-center py-8 text-slate-500 text-xs"
+                      className="py-8 text-center text-xs text-slate-400"
                     >
                       No workers in this stage
                     </motion.div>
