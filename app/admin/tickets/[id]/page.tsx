@@ -65,11 +65,11 @@ interface AdminUser {
 const statusColor = (status: string) => {
   switch (status) {
     case "open":
-      return "bg-blue-600";
+      return "bg-blue-800 text-white";
     case "in_progress":
-      return "bg-yellow-600";
+      return "bg-yellow-800 text-white";
     case "waiting_user":
-      return "bg-orange-600";
+      return "bg-orange-800 text-white";
     case "closed":
       return "bg-gray-600";
     default:
@@ -480,7 +480,7 @@ export default function AdminTicketViewPage() {
                 </p>
                 {/* Collapsed status dropdown */}
                 <details className="group">
-                  <summary className="text-xs text-slate-500 cursor-pointer hover:text-slate-400 text-center">
+                  <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-400 text-center">
                     Change status
                   </summary>
                   <select

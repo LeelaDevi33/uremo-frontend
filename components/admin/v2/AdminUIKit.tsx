@@ -391,7 +391,7 @@ export function EmptyState({
       <span className="text-4xl mb-3">{icon}</span>
       <h3 className="text-white font-medium mb-1">{title}</h3>
       {description && (
-        <p className="text-slate-500 text-sm mb-4">{description}</p>
+        <p className="text-slate-400 text-sm mb-4">{description}</p>
       )}
       {action &&
         (action.href ? (
@@ -438,7 +438,7 @@ const timelineStatusStyles = {
 
 export function Timeline({ items }: TimelineProps) {
   if (items.length === 0) {
-    return <div className="text-slate-500 text-sm">No timeline events</div>;
+    return <div className="text-slate-400 text-sm">No timeline events</div>;
   }
 
   return (
@@ -458,7 +458,7 @@ export function Timeline({ items }: TimelineProps) {
               <span className="text-white text-sm font-medium">
                 {item.title}
               </span>
-              <span className="text-slate-500 text-xs">
+              <span className="text-slate-400 text-xs">
                 {formatTimeAgo(item.timestamp)}
               </span>
             </div>
