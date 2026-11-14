@@ -131,7 +131,7 @@ export default function AdminAffiliateWithdrawalsPage() {
 
   return (
     <div className="u-container">
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold">Affiliate Withdrawals</h1>
           <p className="text-slate-400 text-sm mt-1">
@@ -146,6 +146,7 @@ export default function AdminAffiliateWithdrawalsPage() {
       {/* Filters */}
       <div className="mb-6 flex gap-4">
         <select
+          aria-label="Filter affiliate withdrawals by status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -202,7 +203,7 @@ export default function AdminAffiliateWithdrawalsPage() {
                     {wd.paymentMethod}:{" "}
                     <span className="text-slate-300">{wd.paymentDetails}</span>
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Requested: {formatDate(wd.createdAt)}
                   </p>
                 </div>
@@ -238,18 +239,18 @@ export default function AdminAffiliateWithdrawalsPage() {
                 <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10 text-sm">
                   {wd.transactionId && (
                     <p className="text-slate-300">
-                      <span className="text-slate-500">Tx ID:</span>{" "}
+                      <span className="text-slate-400">Tx ID:</span>{" "}
                       {wd.transactionId}
                     </p>
                   )}
                   {wd.adminNotes && (
                     <p className="text-slate-400">
-                      <span className="text-slate-500">Notes:</span>{" "}
+                      <span className="text-slate-400">Notes:</span>{" "}
                       {wd.adminNotes}
                     </p>
                   )}
                   {wd.processedAt && (
-                    <p className="text-xs text-slate-500 mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                       Processed: {formatDate(wd.processedAt)}
                       {wd.processedBy && ` by ${wd.processedBy.email}`}
                     </p>
@@ -311,10 +312,11 @@ export default function AdminAffiliateWithdrawalsPage() {
 
               {actionModal.type === "approve" && (
                 <div>
-                  <label className="text-sm text-slate-400 block mb-1">
+                  <label htmlFor="withdrawal-transaction-id" className="text-sm text-slate-400 block mb-1">
                     Transaction ID (optional)
                   </label>
                   <input
+                    id="withdrawal-transaction-id"
                     type="text"
                     value={transactionId}
                     onChange={(e) => setTransactionId(e.target.value)}
@@ -325,12 +327,13 @@ export default function AdminAffiliateWithdrawalsPage() {
               )}
 
               <div>
-                <label className="text-sm text-slate-400 block mb-1">
+                <label htmlFor="withdrawal-admin-notes" className="text-sm text-slate-400 block mb-1">
                   {actionModal.type === "approve"
                     ? "Notes (optional)"
                     : "Rejection Reason"}
                 </label>
                 <textarea
+                  id="withdrawal-admin-notes"
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   placeholder={
@@ -354,8 +357,8 @@ export default function AdminAffiliateWithdrawalsPage() {
                   disabled={submitting}
                   className={`text-sm px-4 py-2 rounded disabled:opacity-50 ${
                     actionModal.type === "approve"
-                      ? "bg-emerald-500 text-white hover:bg-emerald-600"
-                      : "bg-red-500 text-white hover:bg-red-600"
+                      ? "bg-emerald-800 text-white hover:bg-emerald-900"
+                      : "bg-red-800 text-white hover:bg-red-900"
                   }`}
                 >
                   {submitting

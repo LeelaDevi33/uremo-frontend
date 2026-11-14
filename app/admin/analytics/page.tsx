@@ -119,7 +119,7 @@ export default function AdminAnalyticsPage() {
           <button
             onClick={loadData}
             disabled={loading}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 rounded-lg text-sm font-medium transition"
+            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 rounded-lg text-sm font-medium text-white transition"
           >
             {loading ? "Loading..." : "Refresh"}
           </button>
@@ -270,10 +270,11 @@ export default function AdminAnalyticsPage() {
                 {[7, 14, 30].map((d) => (
                   <button
                     key={d}
+                    aria-pressed={chartDays === d}
                     onClick={() => setChartDays(d)}
                     className={`px-3 py-1 rounded-lg text-sm transition ${
                       chartDays === d
-                        ? "bg-emerald-600 text-white"
+                        ? "bg-emerald-800 text-white"
                         : "bg-slate-800 text-gray-400 hover:text-white"
                     }`}
                   >
@@ -331,13 +332,13 @@ export default function AdminAnalyticsPage() {
             </a>
             <a
               href="/admin/wallet"
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-sm transition"
+              className="px-4 py-2 bg-cyan-800 hover:bg-cyan-900 rounded-lg text-sm text-white transition"
             >
               Manage Wallets
             </a>
             <a
               href="/admin/affiliates"
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg text-sm transition"
+              className="px-4 py-2 bg-orange-800 hover:bg-orange-900 rounded-lg text-sm text-white transition"
             >
               Affiliate Directory
             </a>
@@ -446,7 +447,7 @@ function ChartCard({
           );
         })}
       </div>
-      <div className="flex justify-between mt-2 text-[10px] text-gray-500">
+      <div className="flex justify-between mt-2 text-[10px] text-gray-400">
         <span>{data[0]?._id?.slice(5) || ""}</span>
         <span>{data[data.length - 1]?._id?.slice(5) || ""}</span>
       </div>
