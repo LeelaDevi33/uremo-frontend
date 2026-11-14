@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiRequest } from "@/lib/api";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  ActionBar,
   AuditTrail,
   UndoToast,
   useUndoToast,
@@ -116,6 +115,17 @@ export default function AdminWalletPage() {
   >("pending");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await apiRequest("/api/admin/wallet/stats", "GET");
+      setStats(res.stats);
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to load stats", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   useEffect(() => {
     if (!ready) return;
     if (!isAdmin) {
@@ -123,7 +133,7 @@ export default function AdminWalletPage() {
       return;
     }
     fetchStats();
-  }, [ready, isAdmin, isAuthenticated, router]);
+  }, [ready, isAdmin, isAuthenticated, router, fetchStats]);
 
   useEffect(() => {
     if (!ready || !isAdmin) return;
@@ -145,16 +155,7 @@ export default function AdminWalletPage() {
     return () => { current = false; };
   }, [ready, isAdmin, withdrawalFilter, withdrawalBefore, withdrawalReload]);
 
-  const fetchStats = async () => {
-    try {
-      const res = await apiRequest("/api/admin/wallet/stats", "GET");
-      setStats(res.stats);
-    } catch (err: any) {
-      toast(err.message || "Failed to load stats", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   // PATCH_80: Fetch pending topups
   const fetchPendingTopups = async () => {
@@ -205,13 +206,14 @@ export default function AdminWalletPage() {
       toast(res.message || `Topup ${action}d successfully`, "success");
       fetchPendingTopups(); // Refresh the list
       fetchStats(); // Refresh stats
-    } catch (err: any) {
+    } catch (err) {
       // PATCH_81: Handle already-processed case gracefully
-      if (err.payload?.alreadyProcessed) {
+      const payload = err instanceof ApiError ? err.payload : null;
+      if (payload && typeof payload === "object" && "alreadyProcessed" in payload && payload.alreadyProcessed === true) {
         toast("This topup was already processed by another admin", "info");
         fetchPendingTopups(); // Remove from list
       } else {
-        toast(err.message || `Failed to ${action} topup`, "error");
+        toast(err instanceof Error && err.message ? err.message : `Failed to ${action} topup`, "error");
       }
     } finally {
       setVerifyingId(null);
@@ -231,8 +233,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal approved", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to approve withdrawal", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to approve withdrawal", "error");
     } finally {
       setProcessingId(null);
     }
@@ -249,8 +251,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal marked as paid", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to mark withdrawal as paid", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to mark withdrawal as paid", "error");
     } finally {
       setProcessingId(null);
     }
@@ -270,8 +272,8 @@ export default function AdminWalletPage() {
       );
       toast("Withdrawal rejected", "success");
       fetchWithdrawals();
-    } catch (err: any) {
-      toast(err.message || "Failed to reject withdrawal", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to reject withdrawal", "error");
     } finally {
       setProcessingId(null);
     }
@@ -297,8 +299,8 @@ export default function AdminWalletPage() {
       if (res.users?.length === 0) {
         toast("No users found", "info");
       }
-    } catch (err: any) {
-      toast(err.message || "Search failed", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Search failed", "error");
     } finally {
       setSearching(false);
     }
@@ -321,8 +323,8 @@ export default function AdminWalletPage() {
       if (res.users?.length === 0) {
         toast(`No ${tier} balance users found`, "info");
       }
-    } catch (err: any) {
-      toast(err.message || "Filter failed", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Filter failed", "error");
     } finally {
       setSearching(false);
     }
@@ -338,8 +340,8 @@ export default function AdminWalletPage() {
       if (request !== walletRequest.current) return;
       setSelectedUser(res.user);
       setUserTransactions(res.transactions || []);
-    } catch (err: any) {
-      toast(err.message || "Failed to load user wallet", "error");
+    } catch (err) {
+      toast(err instanceof Error && err.message ? err.message : "Failed to load user wallet", "error");
     } finally {
       if (request === walletRequest.current) setUserLoading(false);
     }
@@ -764,7 +766,7 @@ export default function AdminWalletPage() {
                 <span className="text-sm text-slate-400 mr-2">
                   Quick Filter:
                 </span>
-                {[
+                {([
                   { key: "all", label: "All", color: "slate" },
                   { key: "high", label: "🔥 High ($500+)", color: "emerald" },
                   {
@@ -773,10 +775,10 @@ export default function AdminWalletPage() {
                     color: "blue",
                   },
                   { key: "low", label: "💧 Low (<$100)", color: "yellow" },
-                ].map((tier) => (
+                 ] as const).map((tier) => (
                   <button
                     key={tier.key}
-                    onClick={() => filterByTier(tier.key as any)}
+                    onClick={() => filterByTier(tier.key)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                       balanceFilter === tier.key
                         ? tier.key === "high"
