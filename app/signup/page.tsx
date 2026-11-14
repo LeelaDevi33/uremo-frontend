@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiRequest, setAuthSession } from "@/lib/api";
+import { ApiError, apiRequest, setAuthSession } from "@/lib/api";
 import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
 
@@ -160,10 +160,11 @@ function SignupForm() {
       });
       toast("Account created successfully!", "success");
       window.location.replace(next || "/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       // PATCH_54: Better error handling
-      const message = err.message || "Signup failed";
-      const code = err.payload?.code;
+      const message = err instanceof Error && err.message ? err.message : "Signup failed";
+      const payload = err instanceof ApiError ? err.payload : null;
+      const code = payload && typeof payload === "object" && "code" in payload ? payload.code : undefined;
 
       if (code === "EMAIL_EXISTS") {
         setErrors({ email: "An account with this email already exists" });
@@ -367,7 +368,7 @@ function SignupForm() {
 
       <p className="text-sm mt-3 text-slate-400">
         Already have an account?{" "}
-        <a href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-indigo-400 hover:underline">
+        <a href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-indigo-300 underline underline-offset-2 hover:text-indigo-200">
           Login
         </a>
       </p>

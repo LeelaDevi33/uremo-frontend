@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { apiRequest, setAuthSession } from "@/lib/api";
+import { ApiError, apiRequest, setAuthSession } from "@/lib/api";
 import { authReturnPath } from "@/lib/authReturnPath";
 import { useToast } from "@/hooks/useToast";
 
@@ -100,10 +100,11 @@ function LoginForm() {
       setAuthSession({ token: res.token, user: res.user });
       toast("Login successful!", "success");
       window.location.replace(next || "/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       // PATCH_54: Better error handling
-      const message = err.message || "Login failed";
-      const code = err.payload?.code;
+      const message = err instanceof Error && err.message ? err.message : "Login failed";
+      const payload = err instanceof ApiError ? err.payload : null;
+      const code = payload && typeof payload === "object" && "code" in payload ? payload.code : undefined;
 
       // Map error codes to field-level errors
       if (code === "MISSING_FIELDS") {
@@ -211,15 +212,15 @@ function LoginForm() {
         <p className="text-sm mt-3 text-slate-400">
           <a
             href="/forgot-password"
-            className="text-indigo-400 hover:underline"
+            className="text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
           >
             Forgot password?
           </a>
         </p>
 
         <p className="text-sm mt-2 text-slate-400">
-          Don't have an account?{" "}
-          <a href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="text-indigo-400 hover:underline">
+          Don’t have an account?{" "}
+          <a href={next ? `/signup?next=${encodeURIComponent(next)}` : "/signup"} className="text-indigo-300 underline underline-offset-2 hover:text-indigo-200">
             Sign up
           </a>
         </p>

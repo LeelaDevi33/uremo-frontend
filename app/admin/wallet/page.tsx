@@ -62,7 +62,7 @@ interface WithdrawalRequest {
 export default function AdminWalletPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { ready, isAdmin, user: admin } = useAuth();
+  const { ready, isAdmin, isAuthenticated, user: admin } = useAuth();
   const undoToast = useUndoToast();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -119,11 +119,11 @@ export default function AdminWalletPage() {
   useEffect(() => {
     if (!ready) return;
     if (!isAdmin) {
-      router.push("/admin/login");
+      router.replace(isAuthenticated ? "/dashboard" : "/login?next=%2Fadmin%2Fwallet");
       return;
     }
     fetchStats();
-  }, [ready, isAdmin, router]);
+  }, [ready, isAdmin, isAuthenticated, router]);
 
   useEffect(() => {
     if (!ready || !isAdmin) return;
@@ -881,7 +881,7 @@ export default function AdminWalletPage() {
                       No transactions yet
                     </p>
                     <p className="text-xs text-slate-600 mt-1">
-                      Transactions appear when you adjust this user's balance or
+                      Transactions appear when you adjust this user’s balance or
                       when they make purchases.
                     </p>
                   </div>

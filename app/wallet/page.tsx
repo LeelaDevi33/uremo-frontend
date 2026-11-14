@@ -133,7 +133,7 @@ export default function WalletPage() {
   const [loadError, setLoadError] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTopUp, setShowTopUp] = useState(false);
-  const [returnError, setReturnError] = useState("");
+  const [returnError, setReturnError] = useState<{ message: string; canRetry: boolean } | null>(null);
   const [verifyingId, setVerifyingId] = useState("");
   const [returnAttempt, setReturnAttempt] = useState(0);
   const activeReturn = useRef("");
@@ -175,20 +175,20 @@ export default function WalletPage() {
         toast("PayPal checkout cancelled.", "info");
         window.history.replaceState(null, "", "/wallet");
       }
-      if (state === "success") setReturnError("PayPal did not return an order ID. Check your wallet history or contact support.");
+      if (state === "success") setReturnError({ message: "PayPal did not return an order ID. Check your wallet history or contact support.", canRetry: false });
       return;
     }
     const key = orderId + ":" + returnAttempt;
     if (activeReturn.current === key) return;
     activeReturn.current = key;
-    setReturnError("");
+    setReturnError(null);
     async function confirm(id: string) {
       try {
         await confirmPayPalPayment(id);
         window.history.replaceState(null, "", "/wallet");
         toast("PayPal payment confirmed. Your wallet has been credited.", "success");
       } catch (cause) {
-        setReturnError(cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.");
+        setReturnError({ message: cause instanceof Error ? cause.message : "PayPal confirmation could not be completed.", canRetry: true });
       } finally { await fetchData(); }
     }
     void confirm(orderId);
@@ -288,7 +288,7 @@ export default function WalletPage() {
           {loadError} <button className="ml-2 underline" onClick={fetchData}>Reload wallet</button>
         </div>}
         {returnError && <div role="alert" className="mb-4 rounded-lg border border-amber-600/50 p-3 text-amber-200">
-          {returnError} {activeReturn.current && <button className="ml-2 underline" onClick={() => setReturnAttempt(value => value + 1)}>Check payment again</button>}
+          {returnError.message} {returnError.canRetry && <button className="ml-2 underline" onClick={() => setReturnAttempt(value => value + 1)}>Check payment again</button>}
         </div>}
         {/* ===== HEADER WITH SECURITY BADGE ===== */}
         <motion.div
