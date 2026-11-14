@@ -417,7 +417,7 @@ export default function ActionQueuePage() {
         ) : filteredActions.length === 0 ? (
           <div className="p-12 text-center">
             <div className="text-white font-medium">No items to show</div>
-            <div className="text-slate-500 text-sm">
+            <div className="text-slate-400 text-sm">
               {partial ? "No items in the queues that responded." : "No pending items in this view."}
             </div>
           </div>
@@ -569,7 +569,7 @@ function ActionRow({ action }: { action: ActionItem }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="text-white font-medium">{action.title}</div>
-            <span className="text-xs text-slate-500 flex-shrink-0">
+            <span className="text-xs text-slate-400 flex-shrink-0">
               {formatWaitTime(action.blockedHours)}
             </span>
           </div>
@@ -578,11 +578,11 @@ function ActionRow({ action }: { action: ActionItem }) {
           {/* Details Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
             <div className="bg-white/5 rounded px-2 py-1">
-              <span className="text-slate-500">What: </span>
+              <span className="text-slate-400">What: </span>
               <span className="text-slate-300">{action.details.what}</span>
             </div>
             <div className="bg-white/5 rounded px-2 py-1">
-              <span className="text-slate-500">Who: </span>
+              <span className="text-slate-400">Who: </span>
               <span className="text-slate-300">{action.details.who}</span>
             </div>
             <div className="bg-blue-500/10 rounded px-2 py-1">

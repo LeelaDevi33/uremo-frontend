@@ -454,7 +454,7 @@ export default function WalletPage() {
               <div className="flex flex-wrap gap-3 justify-center">
                 <button
                   onClick={() => setShowTopUp(true)}
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-xl font-medium transition-colors"
+                  className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-6 py-3 rounded-xl font-medium transition-colors"
                 >
                   <IconPlus />
                   Add Balance
@@ -506,7 +506,7 @@ export default function WalletPage() {
                           ? tx.failureReason
                           : tx.description || getSourceLabel(tx.source)}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs text-slate-400 mt-0.5">
                         {tx.methodName && <span className="block">{tx.methodName}</span>}
                         {tx.paymentReference && <span className="block break-all">Transfer reference: {tx.paymentReference}</span>}
                         {new Date(tx.createdAt).toLocaleDateString("en-US", {
@@ -538,11 +538,11 @@ export default function WalletPage() {
                     </p>
                     {/* PATCH_80: Only show balance after if transaction is complete */}
                     {tx.status === "success" || !tx.status ? (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400">
                         Bal: ${(tx.balanceAfter || 0).toFixed(2)}
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-400">
                         {tx.status === "failed"
                           ? "Not applied"
                           : "Processing..."}

@@ -449,6 +449,7 @@ function ApplicationForm({ query }: { query: string }) {
               <div className="flex items-center gap-2">
                 <FilterIcon className="w-4 h-4 text-slate-500" />
                 <select
+                  aria-label="Filter roles by category"
                   className="bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition"
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
