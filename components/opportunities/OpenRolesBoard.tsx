@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { catalogPaths, matchesCatalogSearch, roleApplicationPath, type OpenRole } from "@/lib/opportunities";
 import { MarketIcon } from "./MarketUI";
 import { useOpportunityData } from "./useOpportunityData";
@@ -14,11 +15,12 @@ const workModeLabels = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" }
 const labelCategory = (raw: string) => raw.replace(/[_-]+/g, " ").replace(/^./, c => c.toUpperCase());
 
 function BoardHeader() {
+  const { data: { marketplace } } = useSiteSettings();
   return <>
     <header className={styles.masthead}>
       <div className={styles.intro}>
-        <h1>Open roles</h1>
-        <p>Find a specialization that fits your skills. Apply for free to qualify for matching projects.</p>
+        <h1>{marketplace.rolesTitle}</h1>
+        <p>{marketplace.rolesIntro}</p>
       </div>
       <div aria-hidden="true" className={styles.photograph} />
     </header>

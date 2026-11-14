@@ -15,9 +15,7 @@ export default function SupportPage() {
     ""
   ).trim();
 
-  const supportEmail = (
-    settings?.support?.supportEmail || "support@uremo.online"
-  ).trim();
+  const supportEmail = settings.support.supportEmail.trim();
 
   // wa.me expects digits only (no +, spaces, or dashes)
   const whatsappDigits = whatsappConfigured.replace(/[^\d]/g, "");
@@ -38,7 +36,7 @@ export default function SupportPage() {
       <PageHeader
         title="Support"
         emoji={<EmojiSupport />}
-        description="Get help with your orders, account, or any issues"
+        description="Get help with applications, project access, wallet transactions, or your account."
         actionLabel="View My Tickets"
         actionHref="/support/tickets"
       />
@@ -79,7 +77,7 @@ export default function SupportPage() {
       >
         <div className="space-y-4">
           {/* Email Support */}
-          <div className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition">
+          {supportEmail && <div className="p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition">
             <div className="flex items-start gap-4">
               <div className="text-2xl">Email</div>
               <div className="flex-1">
@@ -95,7 +93,7 @@ export default function SupportPage() {
                 </a>
               </div>
             </div>
-          </div>
+          </div>}
 
           {/* WhatsApp Support - Optional, config-driven */}
           {whatsappDigits ? (

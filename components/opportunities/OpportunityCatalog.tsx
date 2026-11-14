@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { catalogPaths, isProjectOffer, matchesCatalogSearch, rentalTerm, roleApplicationPath, type Catalog, type OpenRole, type Opportunity, type PaidIntent } from "@/lib/opportunities";
 import { formatPrice } from "@/lib/orderPrice";
 import { LoadingState, MarketIcon, MarketPage, Notice } from "./MarketUI";
@@ -11,9 +12,9 @@ import { useOpportunityData } from "./useOpportunityData";
 import styles from "./market.module.css";
 
 const sections = {
-  roles: { title: "Open roles", description: "Choose your specialization and apply for free. Each role lists its requirements." },
-  rent: { title: "Rent projects", description: "Rent a specific project for a fixed term after qualifying for its specialization." },
-  buy: { title: "Full Access projects", description: "Get permanent, exclusive access to a specific project with one payment. Anyone can purchase." },
+  roles: "Open roles",
+  rent: "Rent projects",
+  buy: "Full Access projects",
 };
 
 function RoleCard({ role, ready, signedIn }: { role: OpenRole; ready: boolean; signedIn: boolean }) {
@@ -44,6 +45,7 @@ function ProjectCard({ item, type, signedIn }: { item: Opportunity; type: PaidIn
 export default function OpportunityCatalog({ view }: { view: Catalog }) {
   const params = useSearchParams();
   const { ready, token } = useAuth();
+  const { data: { marketplace } } = useSiteSettings();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(params.get("category") || "");
   const roleId = params.get("role");
@@ -63,11 +65,11 @@ export default function OpportunityCatalog({ view }: { view: Catalog }) {
   const noun = isRoles ? "role" : "project";
   const filtered = Boolean(category || search.trim() || (isRoles && roleId));
   return <MarketPage>
-    <header className={styles.hero}><div><h1>{sections[view].title}</h1><p>{sections[view].description}</p></div>
+    <header className={styles.hero}><div><h1>{marketplace[`${view}Title`]}</h1><p>{marketplace[`${view}Intro`]}</p></div>
       {token && <Link href="/opportunities/access" className={styles.secondary}><MarketIcon name="folder" /> My project access</Link>}
     </header>
     <nav aria-label="Explore work" className={styles.intentBar}>
-      {(Object.keys(sections) as Catalog[]).map(key => <Link key={key} aria-current={view === key ? "page" : undefined} href={catalogPaths[key]}>{sections[key].title}</Link>)}
+      {(Object.keys(sections) as Catalog[]).map(key => <Link key={key} aria-current={view === key ? "page" : undefined} href={catalogPaths[key]}>{sections[key]}</Link>)}
     </nav>
     <div className={styles.toolbar}><div className={styles.search}><MarketIcon name="search" /><input type="search" aria-label={`Search ${noun}s`} placeholder={`Search ${noun}s`} value={search} onChange={e=>setSearch(e.target.value)} /></div>
       <label className={styles.selectLabel}>Category<select value={category} onChange={e=>setCategory(e.target.value)}><option value="">All categories</option>
@@ -80,7 +82,7 @@ export default function OpportunityCatalog({ view }: { view: Catalog }) {
         <p>{filtered ? (roleId ? "This specialization may have closed. Browse all open roles to see current openings." : "Try another search or category.") : isRoles ? "Open specializations will appear here when the team starts accepting applications." : "New projects will appear here when they are published."}</p>
         {filtered && (roleId ? <Link className={styles.secondary} href="/open-roles">Browse all open roles</Link> : <button className={styles.secondary} type="button" onClick={()=>{setSearch(""); setCategory("");}}>Clear filters</button>)}
       </Notice> :
-      <section aria-label={sections[view].title}><p aria-live="polite" className={styles.resultCount}>{count} {noun}{count === 1 ? "" : "s"}</p>
+      <section aria-label={sections[view]}><p aria-live="polite" className={styles.resultCount}>{count} {noun}{count === 1 ? "" : "s"}</p>
         <div className={styles.grid}>{isRoles ? shownRoles.map(role=><RoleCard key={role._id} role={role} ready={ready} signedIn={Boolean(token)} />) : shownProjects.map(item=><ProjectCard key={item._id} item={item} type={view} signedIn={Boolean(token)} />)}</div>
       </section>}
   </MarketPage>;
