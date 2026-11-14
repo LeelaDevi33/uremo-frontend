@@ -69,6 +69,7 @@ export default function AdminWalletPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
+  const searchRequest = useRef(0);
   const [balanceFilter, setBalanceFilter] = useState<
     "all" | "high" | "medium" | "low"
   >("all");
@@ -154,7 +155,6 @@ export default function AdminWalletPage() {
       .finally(() => { if (current) setWithdrawalLoading(false); });
     return () => { current = false; };
   }, [ready, isAdmin, withdrawalFilter, withdrawalBefore, withdrawalReload]);
-
 
 
   // PATCH_80: Fetch pending topups
@@ -285,6 +285,7 @@ export default function AdminWalletPage() {
       return;
     }
 
+    const request = ++searchRequest.current;
     setSearching(true);
     try {
       const params = new URLSearchParams();
@@ -295,38 +296,45 @@ export default function AdminWalletPage() {
         `/api/admin/wallet/search?${params.toString()}`,
         "GET",
       );
+      if (request !== searchRequest.current) return;
       setSearchResults(res.users || []);
       if (res.users?.length === 0) {
         toast("No users found", "info");
       }
     } catch (err) {
+      if (request !== searchRequest.current) return;
       toast(err instanceof Error && err.message ? err.message : "Search failed", "error");
     } finally {
-      setSearching(false);
+      if (request === searchRequest.current) setSearching(false);
     }
   };
 
   const filterByTier = async (tier: "all" | "high" | "medium" | "low") => {
     setBalanceFilter(tier);
     if (tier === "all") {
+      ++searchRequest.current;
+      setSearching(false);
       setSearchResults([]);
       return;
     }
 
+    const request = ++searchRequest.current;
     setSearching(true);
     try {
       const res = await apiRequest(
         `/api/admin/wallet/search?tier=${tier}`,
         "GET",
       );
+      if (request !== searchRequest.current) return;
       setSearchResults(res.users || []);
       if (res.users?.length === 0) {
         toast(`No ${tier} balance users found`, "info");
       }
     } catch (err) {
+      if (request !== searchRequest.current) return;
       toast(err instanceof Error && err.message ? err.message : "Filter failed", "error");
     } finally {
-      setSearching(false);
+      if (request === searchRequest.current) setSearching(false);
     }
   };
 
@@ -775,7 +783,7 @@ export default function AdminWalletPage() {
                     color: "blue",
                   },
                   { key: "low", label: "💧 Low (<$100)", color: "yellow" },
-                 ] as const).map((tier) => (
+                ] as const).map((tier) => (
                   <button
                     key={tier.key}
                     onClick={() => filterByTier(tier.key)}
